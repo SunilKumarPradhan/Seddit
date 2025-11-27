@@ -1,0 +1,58 @@
+<aside class="sidebar" [class.collapsed]="isCollapsed()">
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <h3 class="section-title">FEEDS</h3>
+      <a routerLink="/feed" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">home</span>
+        <span class="nav-text">Home</span>
+      </a>
+      <a routerLink="/feed/hot" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">whatshot</span>
+        <span class="nav-text">Hot</span>
+      </a>
+      <a routerLink="/feed/new" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">new_releases</span>
+        <span class="nav-text">New</span>
+      </a>
+      <a routerLink="/feed/top" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">trending_up</span>
+        <span class="nav-text">Top</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <h3 class="section-title">CATEGORIES</h3>
+      @for (category of categories(); track category.id) {
+        <a [routerLink]="['/category', category.slug]" routerLinkActive="active" class="nav-item">
+          <span class="category-emoji">{{ category.emoji }}</span>
+          <span class="nav-text">{{ category.name }}</span>
+        </a>
+      }
+    </div>
+
+    @if (isAuthenticated()) {
+      <div class="nav-section">
+        <h3 class="section-title">MY STUFF</h3>
+        <a routerLink="/favorites" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">favorite</span>
+          <span class="nav-text">Favorites</span>
+        </a>
+        <a routerLink="/my-posts" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">article</span>
+          <span class="nav-text">My Posts</span>
+        </a>
+        <a routerLink="/settings" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">settings</span>
+          <span class="nav-text">Settings</span>
+        </a>
+      </div>
+    }
+  </nav>
+
+  <div class="sidebar-footer">
+    <button class="create-post-btn" routerLink="/create-post">
+      <span class="material-icons">add</span>
+      <span>Create Post</span>
+    </button>
+  </div>
+</aside>

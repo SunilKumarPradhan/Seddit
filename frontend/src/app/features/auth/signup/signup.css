@@ -1,0 +1,40 @@
+/* Reuse all styles from login.css */
+/* Additional styles for signup */
+
+.password-strength {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 4px;
+  background-color: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  transition: width 0.3s, background-color 0.3s;
+}
+
+.strength-fill.weak {
+  background-color: var(--error);
+}
+
+.strength-fill.medium {
+  background-color: var(--warning);
+}
+
+.strength-fill.strong {
+  background-color: var(--success);
+}
+
+.strength-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 60px;
+}

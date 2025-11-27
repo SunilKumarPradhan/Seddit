@@ -1,0 +1,12 @@
+<div class="error-message-container" [class]="'error-' + type()">
+  <span class="material-icons">{{ getIcon() }}</span>
+  <div class="error-content">
+    <h3 class="error-title">{{ title() }}</h3>
+    <p class="error-text">{{ message() }}</p>
+  </div>
+  @if (dismissible()) {
+    <button class="dismiss-btn" (click)="dismiss.emit()">
+      <span class="material-icons">close</span>
+    </button>
+  }
+</div>

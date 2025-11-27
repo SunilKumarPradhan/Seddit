@@ -1,0 +1,30 @@
+<div class="notification-item" [class.unread]="!notification().read" (click)="handleClick()">
+  <div class="notification-icon">
+    @switch (notification().type) {
+      @case ('comment') {
+        <span class="material-icons">comment</span>
+      }
+      @case ('upvote') {
+        <span class="material-icons">thumb_up</span>
+      }
+      @case ('mention') {
+        <span class="material-icons">alternate_email</span>
+      }
+      @case ('post') {
+        <span class="material-icons">article</span>
+      }
+      @default {
+        <span class="material-icons">notifications</span>
+      }
+    }
+  </div>
+  
+  <div class="notification-content">
+    <p class="notification-message">{{ notification().message }}</p>
+    <span class="notification-time">{{ formatTime(notification().createdAt) }}</span>
+  </div>
+  
+  @if (!notification().read) {
+    <span class="unread-indicator"></span>
+  }
+</div>

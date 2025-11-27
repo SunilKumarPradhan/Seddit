@@ -1,0 +1,113 @@
+.comment-item {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.comment-thread-line {
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--border-primary);
+}
+
+.comment-content {
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-author {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.comment-author:hover {
+  color: var(--primary-orange);
+  text-decoration: underline;
+}
+
+.op-badge {
+  padding: 2px 6px;
+  background-color: var(--primary-orange);
+  color: white;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.comment-time {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.comment-body {
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.comment-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.comment-action .material-icons {
+  font-size: 16px;
+}
+
+.reply-form-container {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.comment-replies {
+  margin-top: 16px;
+}
+
+/* Nested comment styling */
+.comment-item .comment-item .comment-content {
+  background-color: var(--bg-secondary);
+}
+
+/* Max nesting depth visual indicator */
+.comment-item[style*="margin-left: 120px"] .comment-thread-line {
+  background: linear-gradient(to bottom, var(--border-primary), transparent);
+}

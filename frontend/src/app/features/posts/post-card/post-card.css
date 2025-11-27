@@ -1,0 +1,110 @@
+.post-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  display: flex;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.post-card:hover {
+  border-color: var(--border-secondary);
+}
+
+.post-votes {
+  padding: 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px 0 0 4px;
+}
+
+.post-content {
+  flex: 1;
+  padding: 12px;
+}
+
+.post-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.post-author {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.post-separator {
+  color: var(--text-muted);
+}
+
+.post-tag {
+  padding: 2px 8px;
+  background-color: var(--primary-orange);
+  color: white;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.post-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.post-image-container {
+  margin: 12px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  max-height: 512px;
+}
+
+.post-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.post-description {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.post-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.post-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.post-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.post-action .material-icons {
+  font-size: 18px;
+}

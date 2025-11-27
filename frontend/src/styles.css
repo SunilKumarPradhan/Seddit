@@ -1,1 +1,77 @@
-/* You can add global styles to this file, and also import other style files */
+/* Import Material Icons and Monospace Font */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+/* CSS Variables for Dark Theme */
+:root {
+  /* Primary Colors */
+  --primary-orange: #ff4500;
+  --primary-orange-light: #ff6b4a;
+  --primary-orange-dark: #cc3700;
+  
+  /* Background Colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1b;
+  --bg-tertiary: #272729;
+  --bg-hover: #343536;
+  
+  /* Text Colors */
+  --text-primary: #d7dadc;
+  --text-secondary: #818384;
+  --text-muted: #565758;
+  
+  /* Border Colors */
+  --border-primary: #343536;
+  --border-secondary: #474748;
+  
+  /* Status Colors */
+  --upvote: #ff4500;
+  --downvote: #7193ff;
+  --success: #46d160;
+  --error: #ea0027;
+  --warning: #ffd635;
+}
+
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Material Overrides */
+.mat-mdc-button.mat-primary {
+  --mdc-filled-button-container-color: var(--primary-orange);
+}
+
+.mat-mdc-raised-button.mat-primary {
+  --mdc-protected-button-container-color: var(--primary-orange);
+}

@@ -1,0 +1,62 @@
+.vote-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.vote-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vote-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.vote-btn .material-icons {
+  font-size: 20px;
+}
+
+.vote-btn.upvote.active {
+  color: var(--upvote);
+}
+
+.vote-btn.downvote.active {
+  color: var(--downvote);
+}
+
+.vote-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 30px;
+  text-align: center;
+}
+
+.vote-count.upvoted {
+  color: var(--upvote);
+}
+
+.vote-count.downvoted {
+  color: var(--downvote);
+}
+
+/* Horizontal layout variant */
+.vote-container.horizontal {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.vote-container.horizontal .vote-btn .material-icons {
+  font-size: 18px;
+}

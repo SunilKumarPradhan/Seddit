@@ -1,0 +1,104 @@
+<div class="post-detail-container">
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else if (post()) {
+    <article class="post-detail">
+      <div class="post-detail-header">
+        <div class="post-meta">
+          <app-user-avatar [username]="post().author" [size]="40"></app-user-avatar>
+          <div class="post-meta-info">
+            <a [routerLink]="['/profile', post().author]" class="post-author">
+              {{ post().author }}
+            </a>
+            <span class="post-time">{{ formatTime(post().createdAt) }}</span>
+          </div>
+        </div>
+        
+        @if (canModerate()) {
+          <div class="post-actions">
+            <button class="action-btn" (click)="editPost()">
+              <span class="material-icons">edit</span>
+            </button>
+            <button class="action-btn danger" (click)="deletePost()">
+              <span class="material-icons">delete</span>
+            </button>
+          </div>
+        }
+      </div>
+      
+      <h1 class="post-detail-title">{{ post().title }}</h1>
+      
+      @if (post().tag) {
+        <span class="post-detail-tag">{{ post().tag }}</span>
+      }
+      
+      @if (post().imageUrl) {
+        <div class="post-detail-image">
+          <img [src]="post().imageUrl" [alt]="post().title">
+        </div>
+      }
+      
+      @if (post().description) {
+        <div class="post-detail-description">{{ post().description }}</div>
+      }
+      
+      <div class="post-detail-footer">
+        <app-vote-buttons 
+          [upvotes]="post().upvotes"
+          [downvotes]="post().downvotes"
+          [orientation]="'horizontal'"
+          (vote)="handleVote($event)"
+        ></app-vote-buttons>
+        
+        <button class="post-detail-action" (click)="share()">
+          <span class="material-icons">share</span>
+          <span>Share</span>
+        </button>
+        
+        <button class="post-detail-action" (click)="toggleFavorite()">
+          <span class="material-icons">{{ isFavorite() ? 'bookmark' : 'bookmark_border' }}</span>
+          <span>Save</span>
+        </button>
+        
+        <button class="post-detail-action" (click)="report()">
+          <span class="material-icons">flag</span>
+          <span>Report</span>
+        </button>
+      </div>
+    </article>
+    
+    <section class="comments-section">
+      <div class="comments-header">
+        <h2>Comments ({{ post().commentCount }})</h2>
+        <select class="comment-sort" [(ngModel)]="commentSort">
+          <option value="best">Best</option>
+          <option value="new">New</option>
+          <option value="top">Top</option>
+        </select>
+      </div>
+      
+      @if (isAuthenticated()) {
+        <app-comment-form 
+          (submit)="addComment($event)"
+        ></app-comment-form>
+      } @else {
+        <div class="login-prompt">
+          <p>Please <a routerLink="/login">login</a> to comment</p>
+        </div>
+      }
+      
+      <div class="comments-list">
+        <app-comment-thread 
+          [comments]="comments()"
+        ></app-comment-thread>
+      </div>
+    </section>
+  } @else {
+    <div class="error-state">
+      <span class="material-icons">error_outline</span>
+      <h2>Post not found</h2>
+      <p>This post may have been deleted or you don't have permission to view it.</p>
+      <button routerLink="/feed" class="back-btn">Back to Feed</button>
+    </div>
+  }
+</div>

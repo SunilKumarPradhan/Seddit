@@ -1,0 +1,141 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <span class="logo-icon">🔥</span>
+        <h1>MemeForum</h1>
+      </div>
+      <p class="auth-subtitle">Join the meme revolution!</p>
+    </div>
+    
+    <form [formGroup]="signupForm" (ngSubmit)="onSubmit()" class="auth-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input 
+          id="username"
+          type="text" 
+          formControlName="username"
+          class="form-input"
+          placeholder="memeLord420"
+          [class.error]="isFieldInvalid('username')"
+        >
+        @if (isFieldInvalid('username')) {
+          <span class="error-message">Username must be 3-20 characters</span>
+        }
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          type="email" 
+          formControlName="email"
+          class="form-input"
+          placeholder="your@email.com"
+          [class.error]="isFieldInvalid('email')"
+        >
+        @if (isFieldInvalid('email')) {
+          <span class="error-message">Please enter a valid email</span>
+        }
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="password-input-wrapper">
+          <input 
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            class="form-input"
+            placeholder="••••••••"
+            [class.error]="isFieldInvalid('password')"
+          >
+          <button 
+            type="button"
+            class="password-toggle"
+            (click)="togglePassword()"
+          >
+            <span class="material-icons">
+              {{ showPassword() ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+        </div>
+        @if (isFieldInvalid('password')) {
+          <span class="error-message">Password must be at least 6 characters</span>
+        }
+        
+        <div class="password-strength">
+          <div class="strength-bar">
+            <div 
+              class="strength-fill" 
+              [style.width.%]="passwordStrength()"
+              [class.weak]="passwordStrength() <= 33"
+              [class.medium]="passwordStrength() > 33 && passwordStrength() <= 66"
+              [class.strong]="passwordStrength() > 66"
+            ></div>
+          </div>
+          <span class="strength-text">{{ getPasswordStrengthText() }}</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input 
+          id="confirmPassword"
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="confirmPassword"
+          class="form-input"
+          placeholder="••••••••"
+          [class.error]="isFieldInvalid('confirmPassword')"
+        >
+        @if (isFieldInvalid('confirmPassword')) {
+          <span class="error-message">Passwords do not match</span>
+        }
+      </div>
+      
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="agreeToTerms">
+          <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a></span>
+        </label>
+      </div>
+      
+      @if (errorMessage()) {
+        <div class="alert alert-error">
+          {{ errorMessage() }}
+        </div>
+      }
+      
+      <button 
+        type="submit" 
+        class="submit-btn"
+        [disabled]="signupForm.invalid || isLoading()"
+      >
+        @if (isLoading()) {
+          <span class="spinner-small"></span>
+          <span>Creating account...</span>
+        } @else {
+          <span>Sign Up</span>
+        }
+      </button>
+      
+      <div class="divider">
+        <span>OR</span>
+      </div>
+      
+      <button type="button" class="oauth-btn google" (click)="signupWithGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        <span>Sign up with Google</span>
+      </button>
+      
+      <button type="button" class="oauth-btn github" (click)="signupWithGithub()">
+        <span class="material-icons">code</span>
+        <span>Sign up with GitHub</span>
+      </button>
+    </form>
+    
+    <div class="auth-footer">
+      <p>Already have an account? <a routerLink="/login">Login</a></p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,123 @@
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s;
+}
+
+.dialog-container {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  animation: slideUp 0.3s;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.dialog-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.dialog-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dialog-body {
+  padding: 20px;
+}
+
+.dialog-body p {
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.dialog-btn {
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.dialog-btn.cancel {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.dialog-btn.cancel:hover {
+  background-color: var(--bg-hover);
+}
+
+.dialog-btn.confirm {
+  background-color: var(--primary-orange);
+  color: white;
+}
+
+.dialog-btn.confirm:hover {
+  background-color: var(--primary-orange-light);
+}
+
+.dialog-btn.confirm.danger {
+  background-color: var(--error);
+}
+
+.dialog-btn.confirm.danger:hover {
+  background-color: #ff1744;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

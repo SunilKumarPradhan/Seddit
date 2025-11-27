@@ -1,0 +1,29 @@
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding-top: 48px; /* Header height */
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  padding: 20px;
+  margin-left: 280px; /* Sidebar width */
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .main-content {
+    margin-left: 0;
+    padding: 16px;
+  }
+}

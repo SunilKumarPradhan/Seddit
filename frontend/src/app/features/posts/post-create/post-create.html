@@ -1,0 +1,99 @@
+<div class="create-post-container">
+  <div class="create-post-header">
+    <h1>Create a Post</h1>
+    <button class="close-btn" routerLink="/feed">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+  
+  <form [formGroup]="postForm" (ngSubmit)="onSubmit()" class="post-form">
+    <div class="form-group">
+      <label for="title">Title *</label>
+      <input
+        id="title"
+        type="text"
+        formControlName="title"
+        class="form-input"
+        placeholder="An interesting title..."
+        [class.error]="isFieldInvalid('title')"
+      >
+      <span class="char-count">{{ titleLength() }}/300</span>
+      @if (isFieldInvalid('title')) {
+        <span class="error-message">Title is required (min 3 characters)</span>
+      }
+    </div>
+    
+    <div class="form-group">
+      <label for="tag">Tag</label>
+      <select id="tag" formControlName="tag" class="form-select">
+        <option value="">Select a tag (optional)</option>
+        @for (tag of tags(); track tag) {
+          <option [value]="tag">{{ tag }}</option>
+        }
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="image">Image</label>
+      <div class="image-upload-area" 
+           [class.has-image]="imagePreview()"
+           (click)="fileInput.click()"
+           (drop)="onDrop($event)"
+           (dragover)="onDragOver($event)"
+           (dragleave)="onDragLeave($event)"
+           [class.drag-over]="isDragging()">
+        
+        @if (imagePreview()) {
+          <img [src]="imagePreview()" alt="Preview" class="image-preview">
+          <button type="button" class="remove-image" (click)="removeImage($event)">
+            <span class="material-icons">close</span>
+          </button>
+        } @else {
+          <div class="upload-placeholder">
+            <span class="material-icons">image</span>
+            <p>Click or drag image here</p>
+            <span class="upload-hint">PNG, JPG, GIF up to 10MB</span>
+          </div>
+        }
+        
+        <input
+          #fileInput
+          type="file"
+          accept="image/*"
+          (change)="onFileSelected($event)"
+          style="display: none"
+        >
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea
+        id="description"
+        formControlName="description"
+        class="form-textarea"
+        placeholder="Add some context... (optional)"
+        rows="4"
+      ></textarea>
+      <span class="char-count">{{ descriptionLength() }}/1000</span>
+    </div>
+    
+    <div class="form-actions">
+      <button type="button" class="cancel-btn" routerLink="/feed">
+        Cancel
+      </button>
+      <button
+        type="submit"
+        class="submit-btn"
+        [disabled]="postForm.invalid || isSubmitting()"
+      >
+        @if (isSubmitting()) {
+          <span class="spinner-small"></span>
+          <span>Posting...</span>
+        } @else {
+          <span>Post</span>
+        }
+      </button>
+    </div>
+  </form>
+</div>

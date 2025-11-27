@@ -1,0 +1,57 @@
+<div class="comment-form-container">
+  <div class="comment-form-header">
+    <app-user-avatar [size]="32"></app-user-avatar>
+    <span class="comment-as">Comment as <strong>{{ currentUser() }}</strong></span>
+  </div>
+  
+  <form [formGroup]="commentForm" (ngSubmit)="onSubmit()">
+    <div class="comment-editor">
+      <textarea
+        formControlName="content"
+        class="comment-textarea"
+        placeholder="What are your thoughts?"
+        rows="4"
+        [class.focused]="isFocused()"
+        (focus)="isFocused.set(true)"
+        (blur)="handleBlur()"
+      ></textarea>
+      
+      @if (isFocused() || commentForm.get('content')?.value) {
+        <div class="comment-toolbar">
+          <div class="toolbar-buttons">
+            <button type="button" class="toolbar-btn" title="Bold" (click)="formatText('bold')">
+              <span class="material-icons">format_bold</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Italic" (click)="formatText('italic')">
+              <span class="material-icons">format_italic</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Code" (click)="formatText('code')">
+              <span class="material-icons">code</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Link" (click)="formatText('link')">
+              <span class="material-icons">link</span>
+            </button>
+          </div>
+          
+          <div class="comment-actions">
+            @if (isReplying()) {
+              <button type="button" class="cancel-btn" (click)="cancel()">
+                Cancel
+              </button>
+            }
+            <button 
+              type="submit" 
+              class="submit-comment-btn"
+              [disabled]="commentForm.invalid || isSubmitting()"
+            >
+              @if (isSubmitting()) {
+                <span class="spinner-small"></span>
+              }
+              {{ isReplying() ? 'Reply' : 'Comment' }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  </form>
+</div>

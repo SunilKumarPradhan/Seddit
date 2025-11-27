@@ -1,0 +1,40 @@
+<p>header works!</p>
+<header class="header">
+  <div class="header-left">
+    <button class="menu-toggle" (click)="toggleSidebar()">
+      <span class="material-icons">menu</span>
+    </button>
+    <div class="logo" routerLink="/feed">
+      <span class="logo-icon">🔥</span>
+      <span class="logo-text">MemeForum</span>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <div class="search-bar">
+      <span class="material-icons search-icon">search</span>
+      <input 
+        type="text" 
+        placeholder="Search memes..." 
+        class="search-input"
+      />
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button class="icon-button" routerLink="/create-post">
+      <span class="material-icons">add</span>
+    </button>
+    
+    <app-notification-bell></app-notification-bell>
+    
+    @if (isAuthenticated()) {
+      <div class="user-menu" (click)="toggleUserMenu()">
+        <app-user-avatar [size]="32"></app-user-avatar>
+        <span class="material-icons">arrow_drop_down</span>
+      </div>
+    } @else {
+      <button class="login-btn" routerLink="/login">Login</button>
+    }
+  </div>
+</header>

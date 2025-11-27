@@ -1,0 +1,16 @@
+<div class="comment-thread">
+  @for (comment of comments(); track comment.id) {
+    <app-comment-item 
+      [comment]="comment"
+      [depth]="0"
+      (reply)="handleReply($event)"
+      (vote)="handleVote($event)"
+      (delete)="handleDelete($event)"
+    ></app-comment-item>
+  } @empty {
+    <div class="no-comments">
+      <span class="material-icons">chat_bubble_outline</span>
+      <p>No comments yet. Be the first to share your thoughts!</p>
+    </div>
+  }
+</div>
