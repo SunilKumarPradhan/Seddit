@@ -23,7 +23,9 @@
   /* Border Colors */
   --border-primary: #343536;
   --border-secondary: #474748;
-  
+   /* Additional needed variables */
+  --primary-orange-light: #ff6b4a;
+  --primary-orange-dark: #cc3700;
   /* Status Colors */
   --upvote: #ff4500;
   --downvote: #7193ff;

@@ -3,19 +3,60 @@ DIRECTORY TREE STRUCTURE
 ================================================================================
 
 📁 backend/
+│   📄 .env.example
 │   📄 Dockerfile
-│   📄 docker-compose.yml
+│   📝 README.md
+│   📄 main.py
+│   📄 seed.py
 │   📁 alembic/
+│   │   📄 README
+│   │   📄 env.py
+│   │   📁 versions/
 │   📁 app/
+│   │   📄 config.py
+│   │   📄 database.py
+│   │   📄 dependencies.py
+│   │   📄 main.py
 │   │   📁 api/
 │   │   │   📁 v1/
+│   │   │   │   📄 auth.py
+│   │   │   │   📄 comments.py
+│   │   │   │   📄 posts.py
+│   │   │   │   📄 users.py
+│   │   │   │   📄 websocket.py
 │   │   📁 core/
+│   │   │   📄 permissions.py
+│   │   │   📄 redis_client.py
+│   │   │   📄 security.py
 │   │   📁 middleware/
+│   │   │   📄 logging.py
+│   │   │   📄 rate_limit.py
 │   │   📁 models/
+│   │   │   📄 comment.py
+│   │   │   📄 notification.py
+│   │   │   📄 post.py
+│   │   │   📄 role.py
+│   │   │   📄 user.py
 │   │   📁 repositories/
+│   │   │   📄 comment_repository.py
+│   │   │   📄 post_repository.py
+│   │   │   📄 user_repository.py
 │   │   📁 schemas/
+│   │   │   📄 __init__.py
+│   │   │   📄 auth.py
+│   │   │   📄 comment.py
+│   │   │   📄 notification.py
+│   │   │   📄 post.py
+│   │   │   📄 user.py
 │   │   📁 services/
+│   │   │   📄 auth_service.py
+│   │   │   📄 comment_service.py
+│   │   │   📄 notification_service.py
+│   │   │   📄 post_service.py
+│   │   │   📄 websocket_service.py
 │   │   📁 utils/
+│   │   │   📄 logger.py
+│   📁 logs/
 │   📁 tests/
 
 
@@ -25,21 +66,3273 @@ FILE CONTENTS
 
 
 --------------------------------------------------------------------------------
+FILE: .env.example
+--------------------------------------------------------------------------------
+# Application
+APP_NAME=MemeForum
+APP_VERSION=1.0.0
+DEBUG=True
+ENVIRONMENT=development
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+
+# Database
+DATABASE_URL=postgresql://meme_user:meme_pass@localhost:5432/meme_forum
+DB_ECHO=False
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+
+# Firebase
+FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json
+FIREBASE_PROJECT_ID=your-project-id
+
+# Security
+SECRET_KEY=your-super-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# CORS
+CORS_ORIGINS=["http://localhost:4200","http://localhost:80"]
+
+# File Upload
+MAX_FILE_SIZE=10485760  # 10MB in bytes
+ALLOWED_FILE_TYPES=["image/jpeg","image/png","image/gif","image/webp"]
+UPLOAD_DIR=./uploads
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=logs/app.log
+
+--------------------------------------------------------------------------------
 FILE: Dockerfile
 --------------------------------------------------------------------------------
 [EMPTY FILE]
 
 --------------------------------------------------------------------------------
-FILE: docker-compose.yml
+FILE: README.md
 --------------------------------------------------------------------------------
 [EMPTY FILE]
+
+--------------------------------------------------------------------------------
+FILE: alembic/README
+--------------------------------------------------------------------------------
+Generic single-database configuration.
+
+--------------------------------------------------------------------------------
+FILE: alembic/env.py
+--------------------------------------------------------------------------------
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config, pool
+from alembic import context
+import sys
+from pathlib import Path
+
+# Add app directory to path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.config import settings
+from app.database import Base
+from app.models import user, role, post, comment, notification  # Import all models
+
+# Alembic Config object
+config = context.config
+
+# Set database URL from settings
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+# Interpret the config file for Python logging
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# Target metadata for migrations
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+--------------------------------------------------------------------------------
+FILE: app/api/v1/auth.py
+--------------------------------------------------------------------------------
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.schemas.auth import RegisterRequest, FirebaseTokenRequest, TokenResponse
+from app.services.auth_service import AuthService
+from app.dependencies import get_current_user
+from app.models.user import User
+from app.utils.logger import app_logger
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/register", response_model=TokenResponse)
+async def register(
+    register_data: RegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new user after Firebase authentication.
+    
+    Flow:
+    1. User authenticates with Firebase on frontend
+    2. Frontend sends Firebase UID + user details to this endpoint
+    3. Backend creates user in PostgreSQL
+    4. Returns JWT token for API access
+    """
+    auth_service = AuthService(db)
+    return auth_service.register_user(register_data)
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login(
+    login_data: FirebaseTokenRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Login user with Firebase ID token.
+    
+    Note: In production, verify the Firebase token here.
+    For now, we'll extract the firebase_uid from the token.
+    """
+    # TODO: Verify Firebase token and extract firebase_uid
+    # For now, we'll expect firebase_uid in the token field
+    firebase_uid = login_data.id_token  # Temporary: should be extracted from verified token
+    
+    auth_service = AuthService(db)
+    return auth_service.login_user(firebase_uid)
+
+
+@router.get("/me")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current authenticated user information."""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "email": current_user.email,
+        "avatar_url": current_user.avatar_url,
+        "bio": current_user.bio,
+        "role": current_user.role.name if current_user.role else "user",
+        "created_at": current_user.created_at
+    }
+
+
+@router.post("/logout")
+async def logout(current_user: User = Depends(get_current_user)):
+    """
+    Logout user.
+    
+    Note: With JWT, logout is handled client-side by removing the token.
+    This endpoint is mainly for logging purposes.
+    """
+    app_logger.info(f"User logged out: {current_user.username}")
+    return {"message": "Logged out successfully"}
+
+--------------------------------------------------------------------------------
+FILE: app/api/v1/comments.py
+--------------------------------------------------------------------------------
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import Optional
+from app.database import get_db
+from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse, CommentTreeResponse
+from app.schemas.post import VoteCreate
+from app.services.comment_service import CommentService
+from app.dependencies import get_current_user, get_optional_user
+from app.models.user import User
+
+router = APIRouter(prefix="/comments", tags=["Comments"])
+
+
+@router.post("", response_model=CommentResponse, status_code=201)
+async def create_comment(
+    comment_data: CommentCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new comment or reply."""
+    comment_service = CommentService(db)
+    return comment_service.create_comment(comment_data, current_user)
+
+
+@router.get("/post/{post_id}", response_model=CommentTreeResponse)
+async def get_post_comments(
+    post_id: int,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Get all comments for a post in tree structure."""
+    comment_service = CommentService(db)
+    return comment_service.get_post_comments(post_id, current_user)
+
+
+@router.get("/{comment_id}", response_model=CommentResponse)
+async def get_comment(
+    comment_id: int,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific comment by ID."""
+    comment_service = CommentService(db)
+    return comment_service.get_comment(comment_id, current_user)
+
+
+@router.put("/{comment_id}", response_model=CommentResponse)
+async def update_comment(
+    comment_id: int,
+    comment_data: CommentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a comment."""
+    comment_service = CommentService(db)
+    return comment_service.update_comment(comment_id, comment_data, current_user)
+
+
+@router.delete("/{comment_id}")
+async def delete_comment(
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a comment."""
+    comment_service = CommentService(db)
+    return comment_service.delete_comment(comment_id, current_user)
+
+
+@router.post("/{comment_id}/vote", response_model=CommentResponse)
+async def vote_comment(
+    comment_id: int,
+    vote_data: VoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Vote on a comment."""
+    comment_service = CommentService(db)
+    return comment_service.vote_comment(comment_id, vote_data.vote_type, current_user)
+
+
+@router.delete("/{comment_id}/vote", response_model=CommentResponse)
+async def remove_vote(
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove vote from a comment."""
+    comment_service = CommentService(db)
+    return comment_service.remove_vote(comment_id, current_user)
+
+--------------------------------------------------------------------------------
+FILE: app/api/v1/posts.py
+--------------------------------------------------------------------------------
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.orm import Session
+from typing import Optional
+from app.database import get_db
+from app.schemas.post import PostCreate, PostUpdate, PostResponse, PostListResponse, VoteCreate
+from app.services.post_service import PostService
+from app.dependencies import get_current_user, get_optional_user
+from app.models.user import User
+
+router = APIRouter(prefix="/posts", tags=["Posts"])
+
+
+@router.post("", response_model=PostResponse, status_code=201)
+async def create_post(
+    post_data: PostCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new post."""
+    post_service = PostService(db)
+    return post_service.create_post(post_data, current_user)
+
+
+@router.get("", response_model=PostListResponse)
+async def get_posts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    tag: Optional[str] = Query(None),
+    sort_by: str = Query("new", regex="^(new|hot|top)$"),
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get paginated list of posts.
+    
+    - **page**: Page number (starts at 1)
+    - **page_size**: Number of posts per page (max 100)
+    - **tag**: Filter by tag
+    - **sort_by**: Sort by 'new', 'hot', or 'top'
+    """
+    post_service = PostService(db)
+    return post_service.get_posts(page, page_size, tag, sort_by, current_user)
+
+
+@router.get("/{post_id}", response_model=PostResponse)
+async def get_post(
+    post_id: int,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Get a specific post by ID."""
+    post_service = PostService(db)
+    return post_service.get_post(post_id, current_user)
+
+
+@router.put("/{post_id}", response_model=PostResponse)
+async def update_post(
+    post_id: int,
+    post_data: PostUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a post."""
+    post_service = PostService(db)
+    return post_service.update_post(post_id, post_data, current_user)
+
+
+@router.delete("/{post_id}")
+async def delete_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a post."""
+    post_service = PostService(db)
+    return post_service.delete_post(post_id, current_user)
+
+
+@router.post("/{post_id}/vote", response_model=PostResponse)
+async def vote_post(
+    post_id: int,
+    vote_data: VoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Vote on a post (upvote or downvote)."""
+    post_service = PostService(db)
+    return post_service.vote_post(post_id, vote_data, current_user)
+
+
+@router.delete("/{post_id}/vote", response_model=PostResponse)
+async def remove_vote(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove vote from a post."""
+    post_service = PostService(db)
+    return post_service.remove_vote(post_id, current_user)
+
+
+@router.post("/{post_id}/favorite")
+async def toggle_favorite(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Toggle favorite status of a post."""
+    post_service = PostService(db)
+    return post_service.toggle_favorite(post_id, current_user)
+
+
+@router.get("/user/{user_id}", response_model=PostListResponse)
+async def get_user_posts(
+    user_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Get all posts by a specific user."""
+    post_service = PostService(db)
+    return post_service.get_user_posts(user_id, page, page_size, current_user)
+
+--------------------------------------------------------------------------------
+FILE: app/api/v1/users.py
+--------------------------------------------------------------------------------
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.schemas.user import UserUpdate, UserResponse, UserProfile
+from app.schemas.notification import NotificationListResponse
+from app.repositories.user_repository import UserRepository
+from app.services.notification_service import NotificationService
+from app.dependencies import get_current_user
+from app.models.user import User
+
+router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_my_profile(current_user: User = Depends(get_current_user)):
+    """Get current user's profile."""
+    return current_user
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_my_profile(
+    user_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user's profile."""
+    user_repo = UserRepository(db)
+    return user_repo.update(current_user, user_data)
+
+
+@router.get("/{user_id}", response_model=UserProfile)
+async def get_user_profile(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get public profile of any user."""
+    user_repo = UserRepository(db)
+    user = user_repo.get_by_id(user_id)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return user
+
+
+@router.get("/me/notifications", response_model=NotificationListResponse)
+async def get_my_notifications(
+    unread_only: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's notifications."""
+    notification_service = NotificationService(db)
+    return notification_service.get_user_notifications(
+        current_user.id,
+        unread_only=unread_only
+    )
+
+
+@router.post("/me/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark a notification as read."""
+    notification_service = NotificationService(db)
+    success = notification_service.mark_as_read(notification_id, current_user.id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found"
+        )
+    
+    return {"message": "Notification marked as read"}
+
+
+@router.post("/me/notifications/read-all")
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark all notifications as read."""
+    notification_service = NotificationService(db)
+    count = notification_service.mark_all_as_read(current_user.id)
+    return {"message": f"Marked {count} notifications as read"}
+
+--------------------------------------------------------------------------------
+FILE: app/api/v1/websocket.py
+--------------------------------------------------------------------------------
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.services.websocket_service import connection_manager
+from app.core.security import verify_token
+from app.repositories.user_repository import UserRepository
+from app.utils.logger import app_logger
+
+router = APIRouter(prefix="/ws", tags=["WebSocket"])
+
+
+@router.websocket("")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    WebSocket endpoint for real-time updates.
+    
+    Usage from frontend:
+    ```javascript
+    const ws = new WebSocket('ws://localhost:8000/api/v1/ws?token=YOUR_JWT_TOKEN');
+    ```
+    """
+    try:
+        # Verify token
+        payload = verify_token(token)
+        user_id = payload.get("user_id")
+        
+        if not user_id:
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+        
+        # Verify user exists
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(user_id)
+        
+        if not user or not user.is_active or user.is_banned:
+            await websocket.close(code=1008, reason="User not authorized")
+            return
+        
+        # Connect
+        await connection_manager.connect(websocket, user_id)
+        
+        try:
+            # Send welcome message
+            await websocket.send_json({
+                "type": "connection",
+                "message": "Connected to real-time updates",
+                "user_id": user_id
+            })
+            
+            # Listen for messages (keep connection alive)
+            while True:
+                data = await websocket.receive_text()
+                
+                # Echo back (optional - for testing)
+                await websocket.send_json({
+                    "type": "echo",
+                    "message": data
+                })
+        
+        except WebSocketDisconnect:
+            connection_manager.disconnect(websocket, user_id)
+            app_logger.info(f"WebSocket disconnected: User {user_id}")
+    
+    except Exception as e:
+        app_logger.error(f"WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except:
+            pass
+
+--------------------------------------------------------------------------------
+FILE: app/config.py
+--------------------------------------------------------------------------------
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Optional
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables."""
+    
+    # Application
+    APP_NAME: str = "MemeForum"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = True
+    ENVIRONMENT: str = "development"
+    
+    # Server
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    
+    # Database
+    DATABASE_URL: str
+    DB_ECHO: bool = False
+    
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str = ""
+    
+    # Firebase (Optional for now)
+    FIREBASE_CREDENTIALS_PATH: Optional[str] = None
+    FIREBASE_PROJECT_ID: Optional[str] = None
+    
+    # Security
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # CORS
+    CORS_ORIGINS: List[str] = ["http://localhost:4200"]
+    
+    # File Upload
+    MAX_FILE_SIZE: int = 10485760  # 10MB
+    ALLOWED_FILE_TYPES: List[str] = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+    ]
+    UPLOAD_DIR: str = "./uploads"
+    
+    # Rate Limiting
+    RATE_LIMIT_PER_MINUTE: int = 60
+    
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "logs/app.log"
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"
+    )
+    
+    @property
+    def redis_url(self) -> str:
+        """Construct Redis URL."""
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+
+# Global settings instance
+settings = Settings()
+
+--------------------------------------------------------------------------------
+FILE: app/core/permissions.py
+--------------------------------------------------------------------------------
+from typing import List
+from functools import wraps
+from fastapi import HTTPException, status
+from app.models.user import User
+from app.utils.logger import app_logger
+
+
+# Permission definitions
+PERMISSIONS = {
+    'user': [
+        'post:create',
+        'post:edit:own',
+        'post:delete:own',
+        'comment:create',
+        'comment:edit:own',
+        'comment:delete:own',
+        'vote:create',
+        'favorite:manage',
+    ],
+    'moderator': [
+        'post:create',
+        'post:edit:own',
+        'post:delete:own',
+        'comment:create',
+        'comment:edit:own',
+        'comment:delete:own',
+        'comment:delete:any',
+        'vote:create',
+        'favorite:manage',
+        'user:ban:comment',
+        'thread:lock',
+        'reports:view',
+    ],
+    'admin': [
+        'post:create',
+        'post:edit:own',
+        'post:edit:any',
+        'post:delete:own',
+        'post:delete:any',
+        'post:lock',
+        'comment:create',
+        'comment:edit:own',
+        'comment:edit:any',
+        'comment:delete:own',
+        'comment:delete:any',
+        'vote:create',
+        'favorite:manage',
+        'user:ban:platform',
+        'user:ban:comment',
+        'moderator:manage',
+        'logs:view',
+        'reports:view',
+    ]
+}
+
+
+def get_user_permissions(user: User) -> List[str]:
+    """
+    Get all permissions for a user based on their role.
+    
+    Args:
+        user: User model instance
+    
+    Returns:
+        List of permission strings
+    """
+    if not user.role:
+        return PERMISSIONS.get('user', [])
+    
+    role_name = user.role.name.lower()
+    return PERMISSIONS.get(role_name, [])
+
+
+def has_permission(user: User, permission: str) -> bool:
+    """
+    Check if user has specific permission.
+    
+    Args:
+        user: User model instance
+        permission: Permission string (e.g., 'post:delete:any')
+    
+    Returns:
+        True if user has permission, False otherwise
+    """
+    if not user.is_active or user.is_banned:
+        return False
+    
+    user_permissions = get_user_permissions(user)
+    return permission in user_permissions
+
+
+def require_permission(permission: str):
+    """
+    Decorator to require specific permission for endpoint.
+    
+    Usage:
+        @router.delete("/posts/{post_id}")
+        @require_permission("post:delete:any")
+        async def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
+            ...
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extract current_user from kwargs
+            current_user = kwargs.get('current_user')
+            
+            if not current_user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required"
+                )
+            
+            if not has_permission(current_user, permission):
+                app_logger.warning(
+                    f"User {current_user.id} denied permission: {permission}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"You don't have permission to perform this action"
+                )
+            
+            return await func(*args, **kwargs)
+        
+        return wrapper
+    return decorator
+
+
+def check_resource_ownership(user: User, resource_user_id: int) -> bool:
+    """
+    Check if user owns the resource or has admin privileges.
+    
+    Args:
+        user: Current user
+        resource_user_id: User ID of resource owner
+    
+    Returns:
+        True if user owns resource or is admin
+    """
+    if user.id == resource_user_id:
+        return True
+    
+    # Admins can access any resource
+    return has_permission(user, 'post:edit:any')
+
+--------------------------------------------------------------------------------
+FILE: app/core/redis_client.py
+--------------------------------------------------------------------------------
+import redis
+from redis import Redis
+from typing import Optional
+from app.config import settings
+from app.utils.logger import app_logger
+
+
+class RedisClient:
+    """Redis client wrapper for caching and pub/sub."""
+    
+    def __init__(self):
+        self._client: Optional[Redis] = None
+    
+    def connect(self):
+        """Establish Redis connection."""
+        try:
+            self._client = redis.from_url(
+                settings.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_keepalive=True,
+            )
+            # Test connection
+            self._client.ping()
+            app_logger.info(f"Redis connected: {settings.REDIS_HOST}:{settings.REDIS_PORT}")
+        except Exception as e:
+            app_logger.error(f"Redis connection failed: {e}")
+            raise
+    
+    def disconnect(self):
+        """Close Redis connection."""
+        if self._client:
+            self._client.close()
+            app_logger.info("Redis disconnected")
+    
+    @property
+    def client(self) -> Redis:
+        """Get Redis client instance."""
+        if not self._client:
+            self.connect()
+        return self._client
+    
+    # Cache operations
+    def set_cache(self, key: str, value: str, expire: int = 300):
+        """Set cache with expiration (default 5 minutes)."""
+        return self.client.setex(key, expire, value)
+    
+    def get_cache(self, key: str) -> Optional[str]:
+        """Get cached value."""
+        return self.client.get(key)
+    
+    def delete_cache(self, key: str):
+        """Delete cache key."""
+        return self.client.delete(key)
+    
+    def exists(self, key: str) -> bool:
+        """Check if key exists."""
+        return bool(self.client.exists(key))
+    
+    # Pub/Sub operations
+    def publish(self, channel: str, message: str):
+        """Publish message to channel."""
+        return self.client.publish(channel, message)
+    
+    def subscribe(self, channel: str):
+        """Subscribe to channel."""
+        pubsub = self.client.pubsub()
+        pubsub.subscribe(channel)
+        return pubsub
+    
+    # Stream operations (for notifications)
+    def add_to_stream(self, stream: str, data: dict) -> str:
+        """Add message to Redis stream."""
+        return self.client.xadd(stream, data)
+    
+    def read_stream(self, stream: str, count: int = 10, block: int = 1000):
+        """Read messages from stream."""
+        return self.client.xread({stream: '0'}, count=count, block=block)
+    
+    # Set operations (for active connections)
+    def add_to_set(self, key: str, value: str):
+        """Add value to set."""
+        return self.client.sadd(key, value)
+    
+    def remove_from_set(self, key: str, value: str):
+        """Remove value from set."""
+        return self.client.srem(key, value)
+    
+    def get_set_members(self, key: str):
+        """Get all members of set."""
+        return self.client.smembers(key)
+
+
+# Global Redis instance
+redis_client = RedisClient()
+
+--------------------------------------------------------------------------------
+FILE: app/core/security.py
+--------------------------------------------------------------------------------
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi import HTTPException, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.config import settings
+from app.database import get_db
+from app.models.user import User
+from app.utils.logger import app_logger
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# HTTP Bearer token scheme
+bearer_scheme = HTTPBearer()
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create JWT access token.
+    
+    Args:
+        data: Dictionary to encode in token
+        expires_delta: Token expiration time
+    
+    Returns:
+        Encoded JWT token
+    """
+    to_encode = data.copy()
+    
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    
+    return encoded_jwt
+
+
+def verify_token(token: str) -> dict:
+    """
+    Verify and decode JWT token.
+    
+    Args:
+        token: JWT token string
+    
+    Returns:
+        Decoded token payload
+    
+    Raises:
+        HTTPException: If token is invalid
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload
+    except JWTError as e:
+        app_logger.error(f"Token verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify password against hash."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """Hash password."""
+    return pwd_context.hash(password)
+
+--------------------------------------------------------------------------------
+FILE: app/database.py
+--------------------------------------------------------------------------------
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from typing import Generator
+from app.config import settings
+from app.utils.logger import app_logger
+
+# Create SQLAlchemy engine
+engine = create_engine(
+    settings.DATABASE_URL,
+    echo=settings.DB_ECHO,
+    pool_pre_ping=True,  # Verify connections before using
+    pool_size=10,
+    max_overflow=20,
+)
+
+# Session factory
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+# Base class for models
+Base = declarative_base()
+
+
+def get_db() -> Generator[Session, None, None]:
+    """
+    Dependency function to get database session.
+    
+    Usage in FastAPI:
+        @router.get("/items")
+        def get_items(db: Session = Depends(get_db)):
+            ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def init_db():
+    """Initialize database - create all tables."""
+    from app.models import user, role, post, comment, notification  # noqa
+    
+    app_logger.info("Creating database tables...")
+    Base.metadata.create_all(bind=engine)
+    app_logger.info("Database tables created successfully")
+
+--------------------------------------------------------------------------------
+FILE: app/dependencies.py
+--------------------------------------------------------------------------------
+from typing import Optional
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.core.security import verify_token
+from app.models.user import User
+from app.utils.logger import app_logger
+
+bearer_scheme = HTTPBearer()
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Dependency to get current authenticated user.
+    
+    Usage:
+        @router.get("/me")
+        async def get_me(current_user: User = Depends(get_current_user)):
+            return current_user
+    """
+    token = credentials.credentials
+    
+    # Verify token
+    payload = verify_token(token)
+    user_id: int = payload.get("user_id")
+    
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials"
+        )
+    
+    # Get user from database
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
+        )
+    
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is banned"
+        )
+    
+    return user
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Dependency to get current user if authenticated, None otherwise.
+    Useful for endpoints that work with or without authentication.
+    """
+    if not credentials:
+        return None
+    
+    try:
+        return await get_current_user(credentials, db)
+    except HTTPException:
+        return None
+
+--------------------------------------------------------------------------------
+FILE: app/main.py
+--------------------------------------------------------------------------------
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from app.config import settings
+from app.database import init_db
+from app.core.redis_client import redis_client
+from app.middleware.logging import LoggingMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+from app.utils.logger import app_logger
+
+# Import routers
+from app.api.v1 import auth, posts, comments, users, websocket
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    # Startup
+    app_logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    
+    # Initialize database
+    init_db()
+    
+    # Connect to Redis
+    try:
+        redis_client.connect()
+    except Exception as e:
+        app_logger.error(f"Redis connection failed: {e}")
+    
+    app_logger.info("Application started successfully")
+    
+    yield
+    
+    # Shutdown
+    app_logger.info("Shutting down application")
+    redis_client.disconnect()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="Real-time meme sharing forum API",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Add custom middleware
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
+# Include routers
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(posts.router, prefix="/api/v1")
+app.include_router(comments.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
+app.include_router(websocket.router, prefix="/api/v1")
+
+
+@app.get("/")
+async def root():
+    """Root endpoint."""
+    return {
+        "message": f"Welcome to {settings.APP_NAME}",
+        "version": settings.APP_VERSION,
+        "docs": "/docs"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT
+    }
+
+--------------------------------------------------------------------------------
+FILE: app/middleware/logging.py
+--------------------------------------------------------------------------------
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.utils.logger import app_logger
+import time
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware to log all HTTP requests."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Log request
+        start_time = time.time()
+        
+        app_logger.info(
+            f"Request: {request.method} {request.url.path} "
+            f"from {request.client.host if request.client else 'unknown'}"
+        )
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Log response
+        process_time = time.time() - start_time
+        
+        app_logger.info(
+            f"Response: {response.status_code} "
+            f"for {request.method} {request.url.path} "
+            f"in {process_time:.3f}s"
+        )
+        
+        # Add custom header
+        response.headers["X-Process-Time"] = str(process_time)
+        
+        return response
+
+--------------------------------------------------------------------------------
+FILE: app/middleware/rate_limit.py
+--------------------------------------------------------------------------------
+from fastapi import Request, HTTPException, status
+from starlette.middleware.base import BaseHTTPMiddleware
+from app.core.redis_client import redis_client
+from app.config import settings
+from app.utils.logger import app_logger
+import time
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Simple rate limiting middleware using Redis."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting for health check
+        if request.url.path == "/health":
+            return await call_next(request)
+        
+        # Get client IP
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # Create rate limit key
+        rate_limit_key = f"rate_limit:{client_ip}:{int(time.time() / 60)}"
+        
+        try:
+            # Check current count
+            current_count = redis_client.get_cache(rate_limit_key)
+            
+            if current_count is None:
+                # First request in this minute
+                redis_client.set_cache(rate_limit_key, "1", expire=60)
+            else:
+                count = int(current_count)
+                
+                if count >= settings.RATE_LIMIT_PER_MINUTE:
+                    app_logger.warning(f"Rate limit exceeded for {client_ip}")
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Too many requests. Please try again later."
+                    )
+                
+                # Increment count
+                redis_client.client.incr(rate_limit_key)
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            # If Redis fails, allow request (fail open)
+            app_logger.error(f"Rate limit check failed: {e}")
+        
+        return await call_next(request)
+
+--------------------------------------------------------------------------------
+FILE: app/models/comment.py
+--------------------------------------------------------------------------------
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.database import Base
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True, index=True)
+    
+    content = Column(Text, nullable=False)
+    
+    upvotes = Column(Integer, default=0, nullable=False)
+    downvotes = Column(Integer, default=0, nullable=False)
+    
+    is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    post = relationship("Post", back_populates="comments")
+    author = relationship("User", back_populates="comments")
+    
+    # Self-referential for nested comments
+    replies = relationship(
+        "Comment",
+        backref="parent",
+        remote_side=[id],
+        cascade="all, delete-orphan"
+    )
+    
+    votes = relationship("Vote", back_populates="comment", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Comment {self.id} on Post {self.post_id}>"
+
+--------------------------------------------------------------------------------
+FILE: app/models/notification.py
+--------------------------------------------------------------------------------
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.database import Base
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    
+    type = Column(String(50), nullable=False)  # new_comment, reply, mention, upvote, mod_action
+    message = Column(Text, nullable=False)
+    link = Column(String(500), nullable=True)  # URL to related content
+    
+    is_read = Column(Boolean, default=False, nullable=False, index=True)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="notifications")
+    
+    def __repr__(self):
+        return f"<Notification {self.id} for user {self.user_id}>"
+
+--------------------------------------------------------------------------------
+FILE: app/models/post.py
+--------------------------------------------------------------------------------
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.database import Base
+
+
+class Post(Base):
+    __tablename__ = "posts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    title = Column(String(300), nullable=False)
+    image_url = Column(String(500), nullable=True)
+    tag = Column(String(50), nullable=True, index=True)
+    description = Column(Text, nullable=True)
+    
+    upvotes = Column(Integer, default=0, nullable=False)
+    downvotes = Column(Integer, default=0, nullable=False)
+    
+    is_locked = Column(Boolean, default=False, nullable=False)  # Locked by moderator
+    is_deleted = Column(Boolean, default=False, nullable=False)  # Soft delete
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    author = relationship("User", back_populates="posts")
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
+    votes = relationship("Vote", back_populates="post", cascade="all, delete-orphan")
+    favorites = relationship("Favorite", back_populates="post", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Post {self.id}: {self.title[:30]}>"
+
+
+class Vote(Base):
+    __tablename__ = "votes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True)
+    comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
+    vote_type = Column(String(10), nullable=False)  # 'up' or 'down'
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    post = relationship("Post", back_populates="votes")
+    comment = relationship("Comment", back_populates="votes")
+    
+    def __repr__(self):
+        return f"<Vote {self.vote_type} by user {self.user_id}>"
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    post = relationship("Post", back_populates="favorites")
+    
+    def __repr__(self):
+        return f"<Favorite user={self.user_id} post={self.post_id}>"
+
+--------------------------------------------------------------------------------
+FILE: app/models/role.py
+--------------------------------------------------------------------------------
+from sqlalchemy import Column, Integer, String, JSON
+from app.database import Base
+
+
+class Role(Base):
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), unique=True, nullable=False)  # admin, moderator, user
+    permissions = Column(JSON, nullable=False, default=list)  # List of permission strings
+    
+    def __repr__(self):
+        return f"<Role {self.name}>"
+
+--------------------------------------------------------------------------------
+FILE: app/models/user.py
+--------------------------------------------------------------------------------
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    avatar_url = Column(String(500), nullable=True)
+    bio = Column(String(500), nullable=True)
+    
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, default=3)  # Default: user
+    role = relationship("Role", backref="users")
+    
+    is_active = Column(Boolean, default=True, nullable=False)
+    is_banned = Column(Boolean, default=False, nullable=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="author", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<User {self.username}>"
+
+--------------------------------------------------------------------------------
+FILE: app/repositories/comment_repository.py
+--------------------------------------------------------------------------------
+from typing import Optional, List
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc
+from app.models.comment import Comment
+from app.models.post import Vote
+from app.schemas.comment import CommentCreate, CommentUpdate
+from app.utils.logger import app_logger
+
+
+class CommentRepository:
+    """Repository for Comment database operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, comment_data: CommentCreate, user_id: int) -> Comment:
+        """Create a new comment."""
+        comment = Comment(
+            post_id=comment_data.post_id,
+            user_id=user_id,
+            parent_id=comment_data.parent_id,
+            content=comment_data.content
+        )
+        self.db.add(comment)
+        self.db.commit()
+        self.db.refresh(comment)
+        app_logger.info(f"Comment created: ID {comment.id} on post {comment.post_id}")
+        return comment
+    
+    def get_by_id(self, comment_id: int, include_deleted: bool = False) -> Optional[Comment]:
+        """Get comment by ID."""
+        query = self.db.query(Comment).options(joinedload(Comment.author)).filter(
+            Comment.id == comment_id
+        )
+        
+        if not include_deleted:
+            query = query.filter(Comment.is_deleted == False)
+        
+        return query.first()
+    
+    def get_by_post(self, post_id: int, parent_id: Optional[int] = None) -> List[Comment]:
+        """Get comments for a post (optionally filtered by parent)."""
+        query = self.db.query(Comment).options(joinedload(Comment.author)).filter(
+            Comment.post_id == post_id,
+            Comment.is_deleted == False
+        )
+        
+        if parent_id is not None:
+            query = query.filter(Comment.parent_id == parent_id)
+        else:
+            # Get only top-level comments
+            query = query.filter(Comment.parent_id.is_(None))
+        
+        return query.order_by(Comment.created_at).all()
+    
+    def get_comment_tree(self, post_id: int) -> List[Comment]:
+        """Get nested comment tree for a post using recursive query."""
+        # Use PostgreSQL recursive CTE for nested comments
+        from sqlalchemy import text
+        
+        query = text("""
+            WITH RECURSIVE comment_tree AS (
+                -- Base case: top-level comments
+                SELECT c.*, u.username as author_username, u.avatar_url as author_avatar
+                FROM comments c
+                JOIN users u ON c.user_id = u.id
+                WHERE c.post_id = :post_id AND c.parent_id IS NULL AND c.is_deleted = FALSE
+                
+                UNION ALL
+                
+                -- Recursive case: child comments
+                SELECT c.*, u.username as author_username, u.avatar_url as author_avatar
+                FROM comments c
+                JOIN users u ON c.user_id = u.id
+                INNER JOIN comment_tree ct ON c.parent_id = ct.id
+                WHERE c.is_deleted = FALSE
+            )
+            SELECT * FROM comment_tree ORDER BY created_at;
+        """)
+        
+        result = self.db.execute(query, {"post_id": post_id})
+        return result.fetchall()
+    
+    def count_by_post(self, post_id: int) -> int:
+        """Count comments on a post."""
+        return self.db.query(Comment).filter(
+            Comment.post_id == post_id,
+            Comment.is_deleted == False
+        ).count()
+    
+    def update(self, comment: Comment, comment_data: CommentUpdate) -> Comment:
+        """Update comment."""
+        comment.content = comment_data.content
+        self.db.commit()
+        self.db.refresh(comment)
+        app_logger.info(f"Comment updated: ID {comment.id}")
+        return comment
+    
+    def soft_delete(self, comment: Comment) -> Comment:
+        """Soft delete comment."""
+        comment.is_deleted = True
+        comment.content = "[deleted]"
+        self.db.commit()
+        self.db.refresh(comment)
+        app_logger.info(f"Comment soft deleted: ID {comment.id}")
+        return comment
+    
+    # Vote operations
+    def get_user_vote(self, comment_id: int, user_id: int) -> Optional[Vote]:
+        """Get user's vote on a comment."""
+        return self.db.query(Vote).filter(
+            Vote.comment_id == comment_id,
+            Vote.user_id == user_id
+        ).first()
+    
+    def create_vote(self, comment_id: int, user_id: int, vote_type: str) -> Vote:
+        """Create or update vote on comment."""
+        existing_vote = self.get_user_vote(comment_id, user_id)
+        
+        if existing_vote:
+            old_type = existing_vote.vote_type
+            existing_vote.vote_type = vote_type
+            
+            comment = self.get_by_id(comment_id, include_deleted=True)
+            if old_type == "up":
+                comment.upvotes -= 1
+            else:
+                comment.downvotes -= 1
+            
+            if vote_type == "up":
+                comment.upvotes += 1
+            else:
+                comment.downvotes += 1
+            
+            self.db.commit()
+            return existing_vote
+        
+        vote = Vote(comment_id=comment_id, user_id=user_id, vote_type=vote_type)
+        self.db.add(vote)
+        
+        comment = self.get_by_id(comment_id, include_deleted=True)
+        if vote_type == "up":
+            comment.upvotes += 1
+        else:
+            comment.downvotes += 1
+        
+        self.db.commit()
+        self.db.refresh(vote)
+        app_logger.info(f"Vote created: {vote_type} on comment {comment_id}")
+        return vote
+    
+    def remove_vote(self, comment_id: int, user_id: int) -> None:
+        """Remove vote from comment."""
+        vote = self.get_user_vote(comment_id, user_id)
+        if vote:
+            comment = self.get_by_id(comment_id, include_deleted=True)
+            if vote.vote_type == "up":
+                comment.upvotes -= 1
+            else:
+                comment.downvotes -= 1
+            
+            self.db.delete(vote)
+            self.db.commit()
+            app_logger.info(f"Vote removed from comment {comment_id}")
+
+--------------------------------------------------------------------------------
+FILE: app/repositories/post_repository.py
+--------------------------------------------------------------------------------
+from typing import Optional, List
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc, or_
+from app.models.post import Post, Vote, Favorite
+from app.models.user import User
+from app.schemas.post import PostCreate, PostUpdate
+from app.utils.logger import app_logger
+
+
+class PostRepository:
+    """Repository for Post database operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, post_data: PostCreate, user_id: int) -> Post:
+        """Create a new post."""
+        post = Post(
+            user_id=user_id,
+            title=post_data.title,
+            description=post_data.description,
+            tag=post_data.tag,
+            image_url=post_data.image_url
+        )
+        self.db.add(post)
+        self.db.commit()
+        self.db.refresh(post)
+        app_logger.info(f"Post created: ID {post.id} by user {user_id}")
+        return post
+    
+    def get_by_id(self, post_id: int, include_deleted: bool = False) -> Optional[Post]:
+        """Get post by ID."""
+        query = self.db.query(Post).options(joinedload(Post.author)).filter(Post.id == post_id)
+        
+        if not include_deleted:
+            query = query.filter(Post.is_deleted == False)
+        
+        return query.first()
+    
+    def get_all(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        tag: Optional[str] = None,
+        user_id: Optional[int] = None,
+        sort_by: str = "new"
+    ) -> List[Post]:
+        """Get all posts with filters and pagination."""
+        query = self.db.query(Post).options(joinedload(Post.author)).filter(
+            Post.is_deleted == False
+        )
+        
+        # Filter by tag
+        if tag:
+            query = query.filter(Post.tag == tag)
+        
+        # Filter by user
+        if user_id:
+            query = query.filter(Post.user_id == user_id)
+        
+        # Sorting
+        if sort_by == "new":
+            query = query.order_by(desc(Post.created_at))
+        elif sort_by == "hot":
+            # Simple hot algorithm: (upvotes - downvotes) / age
+            query = query.order_by(desc(Post.upvotes - Post.downvotes))
+        elif sort_by == "top":
+            query = query.order_by(desc(Post.upvotes))
+        
+        return query.offset(skip).limit(limit).all()
+    
+    def count_all(self, tag: Optional[str] = None, user_id: Optional[int] = None) -> int:
+        """Count total posts with filters."""
+        query = self.db.query(Post).filter(Post.is_deleted == False)
+        
+        if tag:
+            query = query.filter(Post.tag == tag)
+        
+        if user_id:
+            query = query.filter(Post.user_id == user_id)
+        
+        return query.count()
+    
+    def search(self, query_text: str, skip: int = 0, limit: int = 20) -> List[Post]:
+        """Search posts by title or description."""
+        search_filter = or_(
+            Post.title.ilike(f"%{query_text}%"),
+            Post.description.ilike(f"%{query_text}%")
+        )
+        
+        return self.db.query(Post).options(joinedload(Post.author)).filter(
+            Post.is_deleted == False,
+            search_filter
+        ).order_by(desc(Post.created_at)).offset(skip).limit(limit).all()
+    
+    def update(self, post: Post, post_data: PostUpdate) -> Post:
+        """Update post."""
+        update_data = post_data.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            setattr(post, field, value)
+        
+        self.db.commit()
+        self.db.refresh(post)
+        app_logger.info(f"Post updated: ID {post.id}")
+        return post
+    
+    def soft_delete(self, post: Post) -> Post:
+        """Soft delete post."""
+        post.is_deleted = True
+        self.db.commit()
+        self.db.refresh(post)
+        app_logger.info(f"Post soft deleted: ID {post.id}")
+        return post
+    
+    def lock_post(self, post: Post) -> Post:
+        """Lock post (prevent new comments)."""
+        post.is_locked = True
+        self.db.commit()
+        self.db.refresh(post)
+        app_logger.info(f"Post locked: ID {post.id}")
+        return post
+    
+    def unlock_post(self, post: Post) -> Post:
+        """Unlock post."""
+        post.is_locked = False
+        self.db.commit()
+        self.db.refresh(post)
+        app_logger.info(f"Post unlocked: ID {post.id}")
+        return post
+    
+    # Vote operations
+    def get_user_vote(self, post_id: int, user_id: int) -> Optional[Vote]:
+        """Get user's vote on a post."""
+        return self.db.query(Vote).filter(
+            Vote.post_id == post_id,
+            Vote.user_id == user_id
+        ).first()
+    
+    def create_vote(self, post_id: int, user_id: int, vote_type: str) -> Vote:
+        """Create or update vote."""
+        # Check if vote already exists
+        existing_vote = self.get_user_vote(post_id, user_id)
+        
+        if existing_vote:
+            # Update existing vote
+            old_type = existing_vote.vote_type
+            existing_vote.vote_type = vote_type
+            
+            # Update post vote counts
+            post = self.get_by_id(post_id, include_deleted=True)
+            if old_type == "up":
+                post.upvotes -= 1
+            else:
+                post.downvotes -= 1
+            
+            if vote_type == "up":
+                post.upvotes += 1
+            else:
+                post.downvotes += 1
+            
+            self.db.commit()
+            return existing_vote
+        
+        # Create new vote
+        vote = Vote(post_id=post_id, user_id=user_id, vote_type=vote_type)
+        self.db.add(vote)
+        
+        # Update post vote counts
+        post = self.get_by_id(post_id, include_deleted=True)
+        if vote_type == "up":
+            post.upvotes += 1
+        else:
+            post.downvotes += 1
+        
+        self.db.commit()
+        self.db.refresh(vote)
+        app_logger.info(f"Vote created: {vote_type} on post {post_id} by user {user_id}")
+        return vote
+    
+    def remove_vote(self, post_id: int, user_id: int) -> None:
+        """Remove vote."""
+        vote = self.get_user_vote(post_id, user_id)
+        if vote:
+            # Update post vote counts
+            post = self.get_by_id(post_id, include_deleted=True)
+            if vote.vote_type == "up":
+                post.upvotes -= 1
+            else:
+                post.downvotes -= 1
+            
+            self.db.delete(vote)
+            self.db.commit()
+            app_logger.info(f"Vote removed from post {post_id} by user {user_id}")
+    
+    # Favorite operations
+    def add_favorite(self, post_id: int, user_id: int) -> Favorite:
+        """Add post to favorites."""
+        existing = self.db.query(Favorite).filter(
+            Favorite.post_id == post_id,
+            Favorite.user_id == user_id
+        ).first()
+        
+        if existing:
+            return existing
+        
+        favorite = Favorite(post_id=post_id, user_id=user_id)
+        self.db.add(favorite)
+        self.db.commit()
+        self.db.refresh(favorite)
+        app_logger.info(f"Post {post_id} favorited by user {user_id}")
+        return favorite
+    
+    def remove_favorite(self, post_id: int, user_id: int) -> None:
+        """Remove post from favorites."""
+        favorite = self.db.query(Favorite).filter(
+            Favorite.post_id == post_id,
+            Favorite.user_id == user_id
+        ).first()
+        
+        if favorite:
+            self.db.delete(favorite)
+            self.db.commit()
+            app_logger.info(f"Post {post_id} unfavorited by user {user_id}")
+    
+    def is_favorited(self, post_id: int, user_id: int) -> bool:
+        """Check if post is favorited by user."""
+        return self.db.query(Favorite).filter(
+            Favorite.post_id == post_id,
+            Favorite.user_id == user_id
+        ).first() is not None
+    
+    def get_user_favorites(self, user_id: int, skip: int = 0, limit: int = 20) -> List[Post]:
+        """Get user's favorite posts."""
+        return self.db.query(Post).join(Favorite).options(joinedload(Post.author)).filter(
+            Favorite.user_id == user_id,
+            Post.is_deleted == False
+        ).order_by(desc(Favorite.created_at)).offset(skip).limit(limit).all()
+
+--------------------------------------------------------------------------------
+FILE: app/repositories/user_repository.py
+--------------------------------------------------------------------------------
+from typing import Optional, List
+from sqlalchemy.orm import Session, joinedload
+from app.models.user import User
+from app.models.role import Role
+from app.schemas.user import UserCreate, UserUpdate
+from app.utils.logger import app_logger
+
+
+class UserRepository:
+    """Repository for User database operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create(self, user_data: UserCreate) -> User:
+        """Create a new user."""
+        user = User(
+            firebase_uid=user_data.firebase_uid,
+            email=user_data.email,
+            username=user_data.username,
+            avatar_url=user_data.avatar_url,
+            role_id=3  # Default: user role
+        )
+        self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        app_logger.info(f"User created: {user.username} (ID: {user.id})")
+        return user
+    
+    def get_by_id(self, user_id: int) -> Optional[User]:
+        """Get user by ID."""
+        return self.db.query(User).options(joinedload(User.role)).filter(User.id == user_id).first()
+    
+    def get_by_firebase_uid(self, firebase_uid: str) -> Optional[User]:
+        """Get user by Firebase UID."""
+        return self.db.query(User).options(joinedload(User.role)).filter(
+            User.firebase_uid == firebase_uid
+        ).first()
+    
+    def get_by_email(self, email: str) -> Optional[User]:
+        """Get user by email."""
+        return self.db.query(User).options(joinedload(User.role)).filter(
+            User.email == email
+        ).first()
+    
+    def get_by_username(self, username: str) -> Optional[User]:
+        """Get user by username."""
+        return self.db.query(User).options(joinedload(User.role)).filter(
+            User.username == username
+        ).first()
+    
+    def update(self, user: User, user_data: UserUpdate) -> User:
+        """Update user information."""
+        update_data = user_data.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            setattr(user, field, value)
+        
+        self.db.commit()
+        self.db.refresh(user)
+        app_logger.info(f"User updated: {user.username} (ID: {user.id})")
+        return user
+    
+    def ban_user(self, user: User) -> User:
+        """Ban a user."""
+        user.is_banned = True
+        user.is_active = False
+        self.db.commit()
+        self.db.refresh(user)
+        app_logger.warning(f"User banned: {user.username} (ID: {user.id})")
+        return user
+    
+    def unban_user(self, user: User) -> User:
+        """Unban a user."""
+        user.is_banned = False
+        user.is_active = True
+        self.db.commit()
+        self.db.refresh(user)
+        app_logger.info(f"User unbanned: {user.username} (ID: {user.id})")
+        return user
+    
+    def delete(self, user: User) -> None:
+        """Delete a user."""
+        username = user.username
+        self.db.delete(user)
+        self.db.commit()
+        app_logger.warning(f"User deleted: {username}")
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/__init__.py
+--------------------------------------------------------------------------------
+"""Pydantic schemas for request/response validation."""
+
+from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.post import PostCreate, PostUpdate, PostResponse
+from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse
+from app.schemas.auth import RegisterRequest, TokenResponse
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/auth.py
+--------------------------------------------------------------------------------
+from pydantic import BaseModel, EmailStr
+
+
+class FirebaseTokenRequest(BaseModel):
+    """Firebase ID token for authentication."""
+    id_token: str
+
+
+class TokenResponse(BaseModel):
+    """JWT token response."""
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+
+class RegisterRequest(BaseModel):
+    """User registration request."""
+    firebase_uid: str
+    email: EmailStr
+    username: str
+    avatar_url: str | None = None
+
+
+class LoginResponse(BaseModel):
+    """Login response with user info."""
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/comment.py
+--------------------------------------------------------------------------------
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
+from datetime import datetime
+
+
+class CommentBase(BaseModel):
+    """Base comment schema."""
+    content: str = Field(..., min_length=1, max_length=10000)
+
+
+class CommentCreate(CommentBase):
+    """Schema for creating a comment."""
+    post_id: int
+    parent_id: Optional[int] = None
+
+
+class CommentUpdate(BaseModel):
+    """Schema for updating a comment."""
+    content: str = Field(..., min_length=1, max_length=10000)
+
+
+class CommentResponse(CommentBase):
+    """Schema for comment response."""
+    id: int
+    post_id: int
+    user_id: int
+    parent_id: Optional[int] = None
+    upvotes: int
+    downvotes: int
+    is_deleted: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    # Author info
+    author_username: str
+    author_avatar: Optional[str] = None
+    
+    # Computed
+    user_vote: Optional[str] = None
+    replies: list["CommentResponse"] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentTreeResponse(BaseModel):
+    """Nested comment tree."""
+    comments: list[CommentResponse]
+    total: int
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/notification.py
+--------------------------------------------------------------------------------
+from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+from typing import Optional
+
+
+class NotificationCreate(BaseModel):
+    """Schema for creating notification."""
+    user_id: int
+    type: str
+    message: str
+    link: Optional[str] = None
+
+
+class NotificationResponse(BaseModel):
+    """Schema for notification response."""
+    id: int
+    user_id: int
+    type: str
+    message: str
+    link: Optional[str] = None
+    is_read: bool
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NotificationListResponse(BaseModel):
+    """List of notifications."""
+    notifications: list[NotificationResponse]
+    unread_count: int
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/post.py
+--------------------------------------------------------------------------------
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
+from datetime import datetime
+
+
+class PostBase(BaseModel):
+    """Base post schema."""
+    title: str = Field(..., min_length=1, max_length=300)
+    description: Optional[str] = None
+    tag: Optional[str] = Field(None, max_length=50)
+
+
+class PostCreate(PostBase):
+    """Schema for creating a post."""
+    image_url: Optional[str] = None
+
+
+class PostUpdate(BaseModel):
+    """Schema for updating a post."""
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    description: Optional[str] = None
+    tag: Optional[str] = Field(None, max_length=50)
+
+
+class PostResponse(PostBase):
+    """Schema for post response."""
+    id: int
+    user_id: int
+    image_url: Optional[str] = None
+    upvotes: int
+    downvotes: int
+    is_locked: bool
+    is_deleted: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    # Author info
+    author_username: str
+    author_avatar: Optional[str] = None
+    
+    # Computed fields
+    comment_count: int = 0
+    user_vote: Optional[str] = None  # 'up', 'down', or None
+    is_favorited: bool = False
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PostListResponse(BaseModel):
+    """Paginated list of posts."""
+    posts: list[PostResponse]
+    total: int
+    page: int
+    page_size: int
+    has_more: bool
+
+
+class VoteCreate(BaseModel):
+    """Schema for voting."""
+    vote_type: str = Field(..., pattern="^(up|down)$")
+
+
+class VoteResponse(BaseModel):
+    """Vote response."""
+    id: int
+    user_id: int
+    post_id: Optional[int] = None
+    comment_id: Optional[int] = None
+    vote_type: str
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+--------------------------------------------------------------------------------
+FILE: app/schemas/user.py
+--------------------------------------------------------------------------------
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import Optional
+from datetime import datetime
+
+
+class UserBase(BaseModel):
+    """Base user schema with common attributes."""
+    email: EmailStr
+    username: str = Field(..., min_length=3, max_length=50)
+
+
+class UserCreate(UserBase):
+    """Schema for user registration."""
+    firebase_uid: str
+    avatar_url: Optional[str] = None
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating user profile."""
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    bio: Optional[str] = Field(None, max_length=500)
+    avatar_url: Optional[str] = None
+
+
+class UserResponse(UserBase):
+    """Schema for user response."""
+    id: int
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    role_id: int
+    is_active: bool
+    is_banned: bool
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UserWithRole(UserResponse):
+    """User response with role information."""
+    role_name: str
+    permissions: list[str]
+
+
+class UserProfile(BaseModel):
+    """Public user profile."""
+    id: int
+    username: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+
+--------------------------------------------------------------------------------
+FILE: app/services/auth_service.py
+--------------------------------------------------------------------------------
+from typing import Optional
+from datetime import timedelta
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+from app.models.user import User
+from app.schemas.auth import RegisterRequest, TokenResponse
+from app.schemas.user import UserCreate
+from app.repositories.user_repository import UserRepository
+from app.core.security import create_access_token
+from app.config import settings
+from app.utils.logger import app_logger
+
+
+class AuthService:
+    """Service for authentication and authorization."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.user_repo = UserRepository(db)
+    
+    def register_user(self, register_data: RegisterRequest) -> TokenResponse:
+        """
+        Register a new user from Firebase authentication.
+        
+        Args:
+            register_data: User registration data with Firebase UID
+        
+        Returns:
+            TokenResponse with access token and user info
+        """
+        # Check if user already exists
+        existing_user = self.user_repo.get_by_firebase_uid(register_data.firebase_uid)
+        if existing_user:
+            app_logger.info(f"User already exists: {existing_user.username}")
+            return self._generate_token_response(existing_user)
+        
+        # Check if email is taken
+        if self.user_repo.get_by_email(register_data.email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Check if username is taken
+        if self.user_repo.get_by_username(register_data.username):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+        
+        # Create user
+        user_data = UserCreate(
+            firebase_uid=register_data.firebase_uid,
+            email=register_data.email,
+            username=register_data.username,
+            avatar_url=register_data.avatar_url
+        )
+        
+        user = self.user_repo.create(user_data)
+        app_logger.info(f"New user registered: {user.username}")
+        
+        return self._generate_token_response(user)
+    
+    def login_user(self, firebase_uid: str) -> TokenResponse:
+        """
+        Login user with Firebase UID.
+        
+        Args:
+            firebase_uid: Firebase user ID
+        
+        Returns:
+            TokenResponse with access token and user info
+        """
+        user = self.user_repo.get_by_firebase_uid(firebase_uid)
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found. Please register first."
+            )
+        
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive"
+            )
+        
+        if user.is_banned:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is banned"
+            )
+        
+        app_logger.info(f"User logged in: {user.username}")
+        return self._generate_token_response(user)
+    
+    def _generate_token_response(self, user: User) -> TokenResponse:
+        """Generate JWT token response for user."""
+        # Create access token
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"user_id": user.id, "username": user.username},
+            expires_delta=access_token_expires
+        )
+        
+        # Prepare user info
+        user_info = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "avatar_url": user.avatar_url,
+            "role": user.role.name if user.role else "user"
+        }
+        
+        return TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=user_info
+        )
+
+--------------------------------------------------------------------------------
+FILE: app/services/comment_service.py
+--------------------------------------------------------------------------------
+from typing import List, Optional
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+from app.models.comment import Comment
+from app.models.user import User
+from app.schemas.comment import (
+    CommentCreate, CommentUpdate, CommentResponse, CommentTreeResponse
+)
+from app.repositories.comment_repository import CommentRepository
+from app.repositories.post_repository import PostRepository
+from app.services.notification_service import NotificationService
+from app.schemas.notification import NotificationCreate
+from app.core.permissions import has_permission, check_resource_ownership
+from app.utils.logger import app_logger
+
+
+class CommentService:
+    """Service for comment operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.comment_repo = CommentRepository(db)
+        self.post_repo = PostRepository(db)
+        self.notification_service = NotificationService(db)
+    
+    def create_comment(self, comment_data: CommentCreate, current_user: User) -> CommentResponse:
+        """Create a new comment or reply."""
+        if not has_permission(current_user, "comment:create"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to create comments"
+            )
+        
+        # Verify post exists and is not locked
+        post = self.post_repo.get_by_id(comment_data.post_id)
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        if post.is_locked:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Post is locked. Cannot add comments."
+            )
+        
+        # If it's a reply, verify parent comment exists
+        if comment_data.parent_id:
+            parent = self.comment_repo.get_by_id(comment_data.parent_id)
+            if not parent:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Parent comment not found"
+                )
+            
+            if parent.post_id != comment_data.post_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Parent comment does not belong to this post"
+                )
+        
+        # Create comment
+        comment = self.comment_repo.create(comment_data, current_user.id)
+        
+        # Create notification for post author (if not commenting on own post)
+        if post.user_id != current_user.id:
+            notification_data = NotificationCreate(
+                user_id=post.user_id,
+                type="new_comment",
+                message=f"{current_user.username} commented on your post: {post.title[:50]}",
+                link=f"/posts/{post.id}"
+            )
+            self.notification_service.create_notification(notification_data)
+        
+        # If it's a reply, notify the parent comment author
+        if comment_data.parent_id and parent.user_id != current_user.id:
+            notification_data = NotificationCreate(
+                user_id=parent.user_id,
+                type="reply",
+                message=f"{current_user.username} replied to your comment",
+                link=f"/posts/{post.id}#comment-{comment.id}"
+            )
+            self.notification_service.create_notification(notification_data)
+        
+        return self._comment_to_response(comment, current_user)
+    
+    def get_comment(self, comment_id: int, current_user: Optional[User] = None) -> CommentResponse:
+        """Get comment by ID."""
+        comment = self.comment_repo.get_by_id(comment_id)
+        
+        if not comment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comment not found"
+            )
+        
+        return self._comment_to_response(comment, current_user)
+    
+    def get_post_comments(
+        self,
+        post_id: int,
+        current_user: Optional[User] = None
+    ) -> CommentTreeResponse:
+        """Get all comments for a post in tree structure."""
+        # Verify post exists
+        post = self.post_repo.get_by_id(post_id)
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        # Get top-level comments
+        top_level_comments = self.comment_repo.get_by_post(post_id)
+        
+        # Build comment tree recursively
+        comment_responses = []
+        for comment in top_level_comments:
+            comment_responses.append(self._build_comment_tree(comment, current_user))
+        
+        total = self.comment_repo.count_by_post(post_id)
+        
+        return CommentTreeResponse(
+            comments=comment_responses,
+            total=total
+        )
+    
+    def update_comment(
+        self,
+        comment_id: int,
+        comment_data: CommentUpdate,
+        current_user: User
+    ) -> CommentResponse:
+        """Update a comment."""
+        comment = self.comment_repo.get_by_id(comment_id)
+        
+        if not comment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comment not found"
+            )
+        
+        # Check permissions
+        if not check_resource_ownership(current_user, comment.user_id):
+            if not has_permission(current_user, "comment:edit:any"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to edit this comment"
+                )
+        
+        updated_comment = self.comment_repo.update(comment, comment_data)
+        return self._comment_to_response(updated_comment, current_user)
+    
+    def delete_comment(self, comment_id: int, current_user: User) -> dict:
+        """Delete a comment (soft delete)."""
+        comment = self.comment_repo.get_by_id(comment_id)
+        
+        if not comment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comment not found"
+            )
+        
+        # Check permissions
+        if not check_resource_ownership(current_user, comment.user_id):
+            if not has_permission(current_user, "comment:delete:any"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to delete this comment"
+                )
+        
+        self.comment_repo.soft_delete(comment)
+        return {"message": "Comment deleted successfully"}
+    
+    def vote_comment(
+        self,
+        comment_id: int,
+        vote_type: str,
+        current_user: User
+    ) -> CommentResponse:
+        """Vote on a comment."""
+        if not has_permission(current_user, "vote:create"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to vote"
+            )
+        
+        comment = self.comment_repo.get_by_id(comment_id)
+        
+        if not comment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comment not found"
+            )
+        
+        self.comment_repo.create_vote(comment_id, current_user.id, vote_type)
+        
+        # Refresh comment to get updated vote counts
+        updated_comment = self.comment_repo.get_by_id(comment_id)
+        return self._comment_to_response(updated_comment, current_user)
+    
+    def remove_vote(self, comment_id: int, current_user: User) -> CommentResponse:
+        """Remove vote from comment."""
+        comment = self.comment_repo.get_by_id(comment_id)
+        
+        if not comment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Comment not found"
+            )
+        
+        self.comment_repo.remove_vote(comment_id, current_user.id)
+        
+        updated_comment = self.comment_repo.get_by_id(comment_id)
+        return self._comment_to_response(updated_comment, current_user)
+    
+    def _comment_to_response(
+        self,
+        comment: Comment,
+        current_user: Optional[User] = None
+    ) -> CommentResponse:
+        """Convert Comment model to CommentResponse schema."""
+        # Get user's vote if authenticated
+        user_vote = None
+        if current_user:
+            vote = self.comment_repo.get_user_vote(comment.id, current_user.id)
+            if vote:
+                user_vote = vote.vote_type
+        
+        return CommentResponse(
+            id=comment.id,
+            post_id=comment.post_id,
+            user_id=comment.user_id,
+            parent_id=comment.parent_id,
+            content=comment.content,
+            upvotes=comment.upvotes,
+            downvotes=comment.downvotes,
+            is_deleted=comment.is_deleted,
+            created_at=comment.created_at,
+            updated_at=comment.updated_at,
+            author_username=comment.author.username,
+            author_avatar=comment.author.avatar_url,
+            user_vote=user_vote,
+            replies=[]  # Will be filled in _build_comment_tree
+        )
+    
+    def _build_comment_tree(
+        self,
+        comment: Comment,
+        current_user: Optional[User] = None
+    ) -> CommentResponse:
+        """Recursively build comment tree with replies."""
+        comment_response = self._comment_to_response(comment, current_user)
+        
+        # Get replies
+        replies = self.comment_repo.get_by_post(comment.post_id, parent_id=comment.id)
+        
+        # Recursively build reply trees
+        comment_response.replies = [
+            self._build_comment_tree(reply, current_user) for reply in replies
+        ]
+        
+        return comment_response
+
+--------------------------------------------------------------------------------
+FILE: app/services/notification_service.py
+--------------------------------------------------------------------------------
+from typing import List
+from sqlalchemy.orm import Session
+from app.models.notification import Notification
+from app.models.user import User
+from app.schemas.notification import NotificationCreate, NotificationResponse, NotificationListResponse
+from app.core.redis_client import redis_client
+from app.utils.logger import app_logger
+import json
+
+
+class NotificationService:
+    """Service for notification operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def create_notification(self, notification_data: NotificationCreate) -> Notification:
+        """Create a new notification."""
+        notification = Notification(
+            user_id=notification_data.user_id,
+            type=notification_data.type,
+            message=notification_data.message,
+            link=notification_data.link
+        )
+        
+        self.db.add(notification)
+        self.db.commit()
+        self.db.refresh(notification)
+        
+        app_logger.info(f"Notification created for user {notification.user_id}")
+        
+        # Publish to Redis Stream for real-time delivery
+        self._publish_to_stream(notification)
+        
+        return notification
+    
+    def get_user_notifications(
+        self,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 20,
+        unread_only: bool = False
+    ) -> NotificationListResponse:
+        """Get notifications for a user."""
+        query = self.db.query(Notification).filter(Notification.user_id == user_id)
+        
+        if unread_only:
+            query = query.filter(Notification.is_read == False)
+        
+        notifications = query.order_by(Notification.created_at.desc()).offset(skip).limit(limit).all()
+        
+        # Get unread count
+        unread_count = self.db.query(Notification).filter(
+            Notification.user_id == user_id,
+            Notification.is_read == False
+        ).count()
+        
+        notification_responses = [
+            NotificationResponse(
+                id=n.id,
+                user_id=n.user_id,
+                type=n.type,
+                message=n.message,
+                link=n.link,
+                is_read=n.is_read,
+                created_at=n.created_at
+            ) for n in notifications
+        ]
+        
+        return NotificationListResponse(
+            notifications=notification_responses,
+            unread_count=unread_count
+        )
+    
+    def mark_as_read(self, notification_id: int, user_id: int) -> bool:
+        """Mark notification as read."""
+        notification = self.db.query(Notification).filter(
+            Notification.id == notification_id,
+            Notification.user_id == user_id
+        ).first()
+        
+        if notification:
+            notification.is_read = True
+            self.db.commit()
+            app_logger.info(f"Notification {notification_id} marked as read")
+            return True
+        
+        return False
+    
+    def mark_all_as_read(self, user_id: int) -> int:
+        """Mark all notifications as read for a user."""
+        count = self.db.query(Notification).filter(
+            Notification.user_id == user_id,
+            Notification.is_read == False
+        ).update({"is_read": True})
+        
+        self.db.commit()
+        app_logger.info(f"Marked {count} notifications as read for user {user_id}")
+        return count
+    
+    def _publish_to_stream(self, notification: Notification):
+        """Publish notification to Redis Stream for real-time delivery."""
+        try:
+            notification_data = {
+                "id": str(notification.id),
+                "user_id": str(notification.user_id),
+                "type": notification.type,
+                "message": notification.message,
+                "link": notification.link or "",
+                "created_at": notification.created_at.isoformat()
+            }
+            
+            redis_client.add_to_stream("notifications:stream", notification_data)
+            app_logger.debug(f"Notification published to stream: {notification.id}")
+        except Exception as e:
+            app_logger.error(f"Failed to publish notification to stream: {e}")
+
+--------------------------------------------------------------------------------
+FILE: app/services/post_service.py
+--------------------------------------------------------------------------------
+from typing import List, Optional
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
+from app.models.post import Post
+from app.models.user import User
+from app.schemas.post import (
+    PostCreate, PostUpdate, PostResponse, PostListResponse, VoteCreate
+)
+from app.repositories.post_repository import PostRepository
+from app.repositories.comment_repository import CommentRepository
+from app.core.permissions import has_permission, check_resource_ownership
+from app.utils.logger import app_logger
+
+
+class PostService:
+    """Service for post operations."""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.post_repo = PostRepository(db)
+        self.comment_repo = CommentRepository(db)
+    
+    def create_post(self, post_data: PostCreate, current_user: User) -> PostResponse:
+        """Create a new post."""
+        if not has_permission(current_user, "post:create"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to create posts"
+            )
+        
+        post = self.post_repo.create(post_data, current_user.id)
+        return self._post_to_response(post, current_user)
+    
+    def get_post(self, post_id: int, current_user: Optional[User] = None) -> PostResponse:
+        """Get post by ID."""
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        return self._post_to_response(post, current_user)
+    
+    def get_posts(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        tag: Optional[str] = None,
+        sort_by: str = "new",
+        current_user: Optional[User] = None
+    ) -> PostListResponse:
+        """Get paginated list of posts."""
+        skip = (page - 1) * page_size
+        
+        posts = self.post_repo.get_all(
+            skip=skip,
+            limit=page_size,
+            tag=tag,
+            sort_by=sort_by
+        )
+        
+        total = self.post_repo.count_all(tag=tag)
+        
+        post_responses = [self._post_to_response(post, current_user) for post in posts]
+        
+        return PostListResponse(
+            posts=post_responses,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=skip + page_size < total
+        )
+    
+    def get_user_posts(
+        self,
+        user_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        current_user: Optional[User] = None
+    ) -> PostListResponse:
+        """Get posts by specific user."""
+        skip = (page - 1) * page_size
+        
+        posts = self.post_repo.get_all(
+            skip=skip,
+            limit=page_size,
+            user_id=user_id,
+            sort_by="new"
+        )
+        
+        total = self.post_repo.count_all(user_id=user_id)
+        
+        post_responses = [self._post_to_response(post, current_user) for post in posts]
+        
+        return PostListResponse(
+            posts=post_responses,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=skip + page_size < total
+        )
+    
+    def update_post(
+        self,
+        post_id: int,
+        post_data: PostUpdate,
+        current_user: User
+    ) -> PostResponse:
+        """Update a post."""
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        # Check permissions
+        if not check_resource_ownership(current_user, post.user_id):
+            if not has_permission(current_user, "post:edit:any"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to edit this post"
+                )
+        
+        updated_post = self.post_repo.update(post, post_data)
+        return self._post_to_response(updated_post, current_user)
+    
+    def delete_post(self, post_id: int, current_user: User) -> dict:
+        """Delete a post."""
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        # Check permissions
+        if not check_resource_ownership(current_user, post.user_id):
+            if not has_permission(current_user, "post:delete:any"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You don't have permission to delete this post"
+                )
+        
+        self.post_repo.soft_delete(post)
+        return {"message": "Post deleted successfully"}
+    
+    def vote_post(self, post_id: int, vote_data: VoteCreate, current_user: User) -> PostResponse:
+        """Vote on a post."""
+        if not has_permission(current_user, "vote:create"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to vote"
+            )
+        
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        self.post_repo.create_vote(post_id, current_user.id, vote_data.vote_type)
+        
+        # Refresh post to get updated vote counts
+        updated_post = self.post_repo.get_by_id(post_id)
+        return self._post_to_response(updated_post, current_user)
+    
+    def remove_vote(self, post_id: int, current_user: User) -> PostResponse:
+        """Remove vote from post."""
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        self.post_repo.remove_vote(post_id, current_user.id)
+        
+        updated_post = self.post_repo.get_by_id(post_id)
+        return self._post_to_response(updated_post, current_user)
+    
+    def toggle_favorite(self, post_id: int, current_user: User) -> dict:
+        """Toggle favorite status of post."""
+        post = self.post_repo.get_by_id(post_id)
+        
+        if not post:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Post not found"
+            )
+        
+        is_favorited = self.post_repo.is_favorited(post_id, current_user.id)
+        
+        if is_favorited:
+            self.post_repo.remove_favorite(post_id, current_user.id)
+            return {"message": "Removed from favorites", "is_favorited": False}
+        else:
+            self.post_repo.add_favorite(post_id, current_user.id)
+            return {"message": "Added to favorites", "is_favorited": True}
+    
+    def _post_to_response(self, post: Post, current_user: Optional[User] = None) -> PostResponse:
+        """Convert Post model to PostResponse schema."""
+        # Get comment count
+        comment_count = self.comment_repo.count_by_post(post.id)
+        
+        # Get user's vote if authenticated
+        user_vote = None
+        is_favorited = False
+        
+        if current_user:
+            vote = self.post_repo.get_user_vote(post.id, current_user.id)
+            if vote:
+                user_vote = vote.vote_type
+            
+            is_favorited = self.post_repo.is_favorited(post.id, current_user.id)
+        
+        return PostResponse(
+            id=post.id,
+            user_id=post.user_id,
+            title=post.title,
+            description=post.description,
+            tag=post.tag,
+            image_url=post.image_url,
+            upvotes=post.upvotes,
+            downvotes=post.downvotes,
+            is_locked=post.is_locked,
+            is_deleted=post.is_deleted,
+            created_at=post.created_at,
+            updated_at=post.updated_at,
+            author_username=post.author.username,
+            author_avatar=post.author.avatar_url,
+            comment_count=comment_count,
+            user_vote=user_vote,
+            is_favorited=is_favorited
+        )
+
+--------------------------------------------------------------------------------
+FILE: app/services/websocket_service.py
+--------------------------------------------------------------------------------
+from typing import Dict, Set
+from fastapi import WebSocket
+from app.utils.logger import app_logger
+import json
+
+
+class ConnectionManager:
+    """Manage WebSocket connections."""
+    
+    def __init__(self):
+        # Store active connections: {user_id: set of WebSocket connections}
+        self.active_connections: Dict[int, Set[WebSocket]] = {}
+    
+    async def connect(self, websocket: WebSocket, user_id: int):
+        """Accept WebSocket connection."""
+        await websocket.accept()
+        
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = set()
+        
+        self.active_connections[user_id].add(websocket)
+        app_logger.info(f"WebSocket connected: User {user_id}")
+    
+    def disconnect(self, websocket: WebSocket, user_id: int):
+        """Remove WebSocket connection."""
+        if user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            
+            # Remove user entry if no more connections
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+        
+        app_logger.info(f"WebSocket disconnected: User {user_id}")
+    
+    async def send_personal_message(self, message: dict, user_id: int):
+        """Send message to specific user (all their connections)."""
+        if user_id in self.active_connections:
+            disconnected = set()
+            
+            for connection in self.active_connections[user_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    app_logger.error(f"Failed to send message to user {user_id}: {e}")
+                    disconnected.add(connection)
+            
+            # Clean up disconnected connections
+            for connection in disconnected:
+                self.active_connections[user_id].discard(connection)
+    
+    async def broadcast(self, message: dict):
+        """Broadcast message to all connected users."""
+        disconnected = []
+        
+        for user_id, connections in self.active_connections.items():
+            for connection in connections:
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    app_logger.error(f"Failed to broadcast to user {user_id}: {e}")
+                    disconnected.append((user_id, connection))
+        
+        # Clean up disconnected connections
+        for user_id, connection in disconnected:
+            self.disconnect(connection, user_id)
+    
+    def is_user_online(self, user_id: int) -> bool:
+        """Check if user is online."""
+        return user_id in self.active_connections and len(self.active_connections[user_id]) > 0
+    
+    def get_online_count(self) -> int:
+        """Get total number of online users."""
+        return len(self.active_connections)
+
+
+# Global connection manager instance
+connection_manager = ConnectionManager()
+
+--------------------------------------------------------------------------------
+FILE: app/utils/logger.py
+--------------------------------------------------------------------------------
+import sys
+from pathlib import Path
+from loguru import logger
+from app.config import settings
+
+
+def setup_logger():
+    """Configure Loguru logger."""
+    
+    # Remove default handler
+    logger.remove()
+    
+    # Console handler with colors
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=settings.LOG_LEVEL,
+        colorize=True,
+    )
+    
+    # File handler
+    log_path = Path(settings.LOG_FILE)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    logger.add(
+        settings.LOG_FILE,
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level=settings.LOG_LEVEL,
+        rotation="10 MB",
+        retention="1 week",
+        compression="zip",
+    )
+    
+    logger.info(f"Logger initialized - Level: {settings.LOG_LEVEL}")
+    
+    return logger
+
+
+# Initialize logger
+app_logger = setup_logger()
+
+--------------------------------------------------------------------------------
+FILE: main.py
+--------------------------------------------------------------------------------
+"""
+Entry point for running the FastAPI application.
+
+Usage:
+    uv run python main.py
+    
+Or with uvicorn directly:
+    uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+"""
+
+import uvicorn
+from app.config import settings
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower()
+    )
+
+--------------------------------------------------------------------------------
+FILE: seed.py
+--------------------------------------------------------------------------------
+from app.database import SessionLocal
+from app.models.role import Role
+from app.utils.logger import app_logger
+
+
+def seed_roles(db):
+    """Seed initial roles and permissions."""
+    
+    roles_data = [
+        {
+            "id": 1,
+            "name": "admin",
+            "permissions": [
+                "post:create", "post:edit:own", "post:edit:any", "post:delete:own", 
+                "post:delete:any", "post:lock",
+                "comment:create", "comment:edit:own", "comment:edit:any", 
+                "comment:delete:own", "comment:delete:any",
+                "vote:create", "favorite:manage",
+                "user:ban:platform", "user:ban:comment",
+                "moderator:manage", "logs:view", "reports:view",
+            ]
+        },
+        {
+            "id": 2,
+            "name": "moderator",
+            "permissions": [
+                "post:create", "post:edit:own", "post:delete:own",
+                "comment:create", "comment:edit:own", "comment:delete:own", 
+                "comment:delete:any",
+                "vote:create", "favorite:manage",
+                "user:ban:comment", "thread:lock", "reports:view",
+            ]
+        },
+        {
+            "id": 3,
+            "name": "user",
+            "permissions": [
+                "post:create", "post:edit:own", "post:delete:own",
+                "comment:create", "comment:edit:own", "comment:delete:own",
+                "vote:create", "favorite:manage",
+            ]
+        }
+    ]
+    
+    for role_data in roles_data:
+        existing = db.query(Role).filter(Role.name == role_data["name"]).first()
+        if not existing:
+            role = Role(**role_data)
+            db.add(role)
+            app_logger.info(f"Created role: {role_data['name']}")
+        else:
+            app_logger.info(f"Role already exists: {role_data['name']}")
+    
+    db.commit()
+    app_logger.info("Roles seeded successfully")
+
+
+def main():
+    """Main seed function."""
+    db = SessionLocal()
+    try:
+        app_logger.info("Starting database seeding...")
+        seed_roles(db)
+        app_logger.info("Database seeded successfully!")
+    except Exception as e:
+        app_logger.error(f"Seeding failed: {e}")
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
 
 
 ================================================================================
 SUMMARY
 ================================================================================
-Total files included: 2
+Total files included: 41
 
 File types:
-  [no extension]: 1
-  .yml: 1
+  .py: 37
+  [no extension]: 2
+  .example: 1
+  .md: 1

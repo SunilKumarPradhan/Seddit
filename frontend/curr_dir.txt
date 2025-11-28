@@ -13,6 +13,7 @@ DIRECTORY TREE STRUCTURE
 │   │   📝 CLAUDE.md
 │   📁 public/
 │   📁 src/
+│   │   🎨 custom-theme.scss
 │   │   🌐 index.html
 │   │   📘 main.ts
 │   │   🎨 styles.css
@@ -303,6 +304,7 @@ FILE: angular.json
               }
             ],
             "styles": [
+              "src/custom-theme.scss",
               "src/styles.css"
             ]
           },
@@ -378,16 +380,21 @@ FILE: package.json
   "private": true,
   "packageManager": "npm@11.6.1",
   "dependencies": {
+    "@angular/animations": "^21.0.1",
+    "@angular/cdk": "^21.0.0",
     "@angular/common": "^21.0.0",
     "@angular/compiler": "^21.0.0",
     "@angular/core": "^21.0.0",
     "@angular/forms": "^21.0.0",
+    "@angular/material": "^21.0.0",
     "@angular/platform-browser": "^21.0.0",
+    "@angular/platform-browser-dynamic": "^21.0.1",
     "@angular/router": "^21.0.0",
     "firebase": "^10.14.1",
     "rxjs": "^7.8.2",
     "socket.io-client": "^4.8.1",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zone.js": "^0.16.0"
   },
   "devDependencies": {
     "@angular/build": "^21.0.0",
@@ -403,375 +410,96 @@ FILE: package.json
 --------------------------------------------------------------------------------
 FILE: src/app/app.config.ts
 --------------------------------------------------------------------------------
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideAnimations } from '@angular/platform-browser/animations';
 
 import { routes } from './app.routes';
+import { jwtInterceptor } from './core/interceptors/jwt-interceptor';
+import { errorInterceptor } from './core/interceptors/error-interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideBrowserGlobalErrorListeners(),
-    provideRouter(routes)
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideHttpClient(
+      withInterceptors([jwtInterceptor, errorInterceptor])
+    ),
+    provideAnimations()
   ]
 };
 
 --------------------------------------------------------------------------------
 FILE: src/app/app.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding-top: 48px; /* Header height */
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  padding: 20px;
+  margin-left: 280px; /* Sidebar width */
+}
+
+/* Responsive */
+@media (max-width: 960px) {
+  .main-content {
+    margin-left: 0;
+    padding: 16px;
+  }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/app.html
 --------------------------------------------------------------------------------
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * The content below * * * * * * * * * * * -->
-<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * -->
-<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * Delete the template below * * * * * * * * * -->
-<!-- * * * * * * * to get started with your project! * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-
-<style>
-  :host {
-    --bright-blue: oklch(51.01% 0.274 263.83);
-    --electric-violet: oklch(53.18% 0.28 296.97);
-    --french-violet: oklch(47.66% 0.246 305.88);
-    --vivid-pink: oklch(69.02% 0.277 332.77);
-    --hot-red: oklch(61.42% 0.238 15.34);
-    --orange-red: oklch(63.32% 0.24 31.68);
-
-    --gray-900: oklch(19.37% 0.006 300.98);
-    --gray-700: oklch(36.98% 0.014 302.71);
-    --gray-400: oklch(70.9% 0.015 304.04);
-
-    --red-to-pink-to-purple-vertical-gradient: linear-gradient(
-      180deg,
-      var(--orange-red) 0%,
-      var(--vivid-pink) 50%,
-      var(--electric-violet) 100%
-    );
-
-    --red-to-pink-to-purple-horizontal-gradient: linear-gradient(
-      90deg,
-      var(--orange-red) 0%,
-      var(--vivid-pink) 50%,
-      var(--electric-violet) 100%
-    );
-
-    --pill-accent: var(--bright-blue);
-
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-      "Segoe UI Symbol";
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  h1 {
-    font-size: 3.125rem;
-    color: var(--gray-900);
-    font-weight: 500;
-    line-height: 100%;
-    letter-spacing: -0.125rem;
-    margin: 0;
-    font-family: "Inter Tight", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-      Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-      "Segoe UI Symbol";
-  }
-
-  p {
-    margin: 0;
-    color: var(--gray-700);
-  }
-
-  main {
-    width: 100%;
-    min-height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 1rem;
-    box-sizing: inherit;
-    position: relative;
-  }
-
-  .angular-logo {
-    max-width: 9.2rem;
-  }
-
-  .content {
-    display: flex;
-    justify-content: space-around;
-    width: 100%;
-    max-width: 700px;
-    margin-bottom: 3rem;
-  }
-
-  .content h1 {
-    margin-top: 1.75rem;
-  }
-
-  .content p {
-    margin-top: 1.5rem;
-  }
-
-  .divider {
-    width: 1px;
-    background: var(--red-to-pink-to-purple-vertical-gradient);
-    margin-inline: 0.5rem;
-  }
-
-  .pill-group {
-    display: flex;
-    flex-direction: column;
-    align-items: start;
-    flex-wrap: wrap;
-    gap: 1.25rem;
-  }
-
-  .pill {
-    display: flex;
-    align-items: center;
-    --pill-accent: var(--bright-blue);
-    background: color-mix(in srgb, var(--pill-accent) 5%, transparent);
-    color: var(--pill-accent);
-    padding-inline: 0.75rem;
-    padding-block: 0.375rem;
-    border-radius: 2.75rem;
-    border: 0;
-    transition: background 0.3s ease;
-    font-family: var(--inter-font);
-    font-size: 0.875rem;
-    font-style: normal;
-    font-weight: 500;
-    line-height: 1.4rem;
-    letter-spacing: -0.00875rem;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .pill:hover {
-    background: color-mix(in srgb, var(--pill-accent) 15%, transparent);
-  }
-
-  .pill-group .pill:nth-child(6n + 1) {
-    --pill-accent: var(--bright-blue);
-  }
-  .pill-group .pill:nth-child(6n + 2) {
-    --pill-accent: var(--electric-violet);
-  }
-  .pill-group .pill:nth-child(6n + 3) {
-    --pill-accent: var(--french-violet);
-  }
-
-  .pill-group .pill:nth-child(6n + 4),
-  .pill-group .pill:nth-child(6n + 5),
-  .pill-group .pill:nth-child(6n + 6) {
-    --pill-accent: var(--hot-red);
-  }
-
-  .pill-group svg {
-    margin-inline-start: 0.25rem;
-  }
-
-  .social-links {
-    display: flex;
-    align-items: center;
-    gap: 0.73rem;
-    margin-top: 1.5rem;
-  }
-
-  .social-links path {
-    transition: fill 0.3s ease;
-    fill: var(--gray-400);
-  }
-
-  .social-links a:hover svg path {
-    fill: var(--gray-900);
-  }
-
-  @media screen and (max-width: 650px) {
-    .content {
-      flex-direction: column;
-      width: max-content;
-    }
-
-    .divider {
-      height: 1px;
-      width: 100%;
-      background: var(--red-to-pink-to-purple-horizontal-gradient);
-      margin-block: 1.5rem;
-    }
-  }
-</style>
-
-<main class="main">
-  <div class="content">
-    <div class="left-side">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 982 239"
-        fill="none"
-        class="angular-logo"
-      >
-        <g clip-path="url(#a)">
-          <path
-            fill="url(#b)"
-            d="M388.676 191.625h30.849L363.31 31.828h-35.758l-56.215 159.797h30.848l13.174-39.356h60.061l13.256 39.356Zm-65.461-62.675 21.602-64.311h1.227l21.602 64.311h-44.431Zm126.831-7.527v70.202h-28.23V71.839h27.002v20.374h1.392c2.782-6.71 7.2-12.028 13.255-15.956 6.056-3.927 13.584-5.89 22.503-5.89 8.264 0 15.465 1.8 21.684 5.318 6.137 3.518 10.964 8.673 14.319 15.382 3.437 6.71 5.074 14.81 4.992 24.383v76.175h-28.23v-71.92c0-8.019-2.046-14.237-6.219-18.819-4.173-4.5-9.819-6.791-17.102-6.791-4.91 0-9.328 1.063-13.174 3.272-3.846 2.128-6.792 5.237-9.001 9.328-2.046 4.009-3.191 8.918-3.191 14.728ZM589.233 239c-10.147 0-18.82-1.391-26.103-4.091-7.282-2.7-13.092-6.382-17.511-10.964-4.418-4.582-7.528-9.655-9.164-15.219l25.448-6.136c1.145 2.372 2.782 4.663 4.991 6.954 2.209 2.291 5.155 4.255 8.837 5.81 3.683 1.554 8.428 2.291 14.074 2.291 8.019 0 14.647-1.964 19.884-5.81 5.237-3.845 7.856-10.227 7.856-19.064v-22.665h-1.391c-1.473 2.946-3.601 5.892-6.383 9.001-2.782 3.109-6.464 5.645-10.965 7.691-4.582 2.046-10.228 3.109-17.101 3.109-9.165 0-17.511-2.209-25.039-6.545-7.446-4.337-13.42-10.883-17.757-19.474-4.418-8.673-6.628-19.473-6.628-32.565 0-13.091 2.21-24.301 6.628-33.383 4.419-9.082 10.311-15.955 17.839-20.7 7.528-4.746 15.874-7.037 25.039-7.037 7.037 0 12.846 1.145 17.347 3.518 4.582 2.373 8.182 5.236 10.883 8.51 2.7 3.272 4.746 6.382 6.137 9.327h1.554v-19.8h27.821v121.749c0 10.228-2.454 18.737-7.364 25.447-4.91 6.709-11.538 11.7-20.048 15.055-8.509 3.355-18.165 4.991-28.884 4.991Zm.245-71.266c5.974 0 11.047-1.473 15.302-4.337 4.173-2.945 7.446-7.118 9.573-12.519 2.21-5.482 3.274-12.027 3.274-19.637 0-7.609-1.064-14.155-3.274-19.8-2.127-5.646-5.318-10.064-9.491-13.255-4.174-3.11-9.329-4.746-15.384-4.746s-11.537 1.636-15.792 4.91c-4.173 3.272-7.365 7.772-9.492 13.418-2.128 5.727-3.191 12.191-3.191 19.392 0 7.2 1.063 13.745 3.273 19.228 2.127 5.482 5.318 9.736 9.573 12.764 4.174 3.027 9.41 4.582 15.629 4.582Zm141.56-26.51V71.839h28.23v119.786h-27.412v-21.273h-1.227c-2.7 6.709-7.119 12.191-13.338 16.446-6.137 4.255-13.747 6.382-22.748 6.382-7.855 0-14.81-1.718-20.783-5.237-5.974-3.518-10.72-8.591-14.075-15.382-3.355-6.709-5.073-14.891-5.073-24.464V71.839h28.312v71.921c0 7.609 2.046 13.664 6.219 18.083 4.173 4.5 9.655 6.709 16.365 6.709 4.173 0 8.183-.982 12.111-3.028 3.927-2.045 7.118-5.072 9.655-9.082 2.537-4.091 3.764-9.164 3.764-15.218Zm65.707-109.395v159.796h-28.23V31.828h28.23Zm44.841 162.169c-7.61 0-14.402-1.391-20.457-4.091-6.055-2.7-10.883-6.791-14.32-12.109-3.518-5.319-5.237-11.946-5.237-19.801 0-6.791 1.228-12.355 3.765-16.773 2.536-4.419 5.891-7.937 10.228-10.637 4.337-2.618 9.164-4.664 14.647-6.055 5.4-1.391 11.046-2.373 16.856-3.027 7.037-.737 12.683-1.391 17.102-1.964 4.337-.573 7.528-1.555 9.574-2.782 1.963-1.309 3.027-3.273 3.027-5.973v-.491c0-5.891-1.718-10.391-5.237-13.664-3.518-3.191-8.51-4.828-15.056-4.828-6.955 0-12.356 1.473-16.447 4.5-4.009 3.028-6.71 6.546-8.183 10.719l-26.348-3.764c2.046-7.282 5.483-13.336 10.31-18.328 4.746-4.909 10.638-8.59 17.511-11.045 6.955-2.455 14.565-3.682 22.912-3.682 5.809 0 11.537.654 17.265 2.045s10.965 3.6 15.711 6.71c4.746 3.109 8.51 7.282 11.455 12.6 2.864 5.318 4.337 11.946 4.337 19.883v80.184h-27.166v-16.446h-.9c-1.719 3.355-4.092 6.464-7.201 9.328-3.109 2.864-6.955 5.237-11.619 6.955-4.828 1.718-10.229 2.536-16.529 2.536Zm7.364-20.701c5.646 0 10.556-1.145 14.729-3.354 4.173-2.291 7.364-5.237 9.655-9.001 2.292-3.763 3.355-7.854 3.355-12.273v-14.155c-.9.737-2.373 1.391-4.5 2.046-2.128.654-4.419 1.145-7.037 1.636-2.619.491-5.155.9-7.692 1.227-2.537.328-4.746.655-6.628.901-4.173.572-8.019 1.472-11.292 2.781-3.355 1.31-5.973 3.11-7.855 5.401-1.964 2.291-2.864 5.318-2.864 8.918 0 5.237 1.882 9.164 5.728 11.782 3.682 2.782 8.51 4.091 14.401 4.091Zm64.643 18.328V71.839h27.412v19.965h1.227c2.21-6.955 5.974-12.274 11.292-16.038 5.319-3.763 11.456-5.645 18.329-5.645 1.555 0 3.355.082 5.237.163 1.964.164 3.601.328 4.91.573v25.938c-1.227-.41-3.109-.819-5.646-1.146a58.814 58.814 0 0 0-7.446-.49c-5.155 0-9.738 1.145-13.829 3.354-4.091 2.209-7.282 5.236-9.655 9.164-2.373 3.927-3.519 8.427-3.519 13.5v70.448h-28.312ZM222.077 39.192l-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
-          />
-          <path
-            fill="url(#c)"
-            d="M388.676 191.625h30.849L363.31 31.828h-35.758l-56.215 159.797h30.848l13.174-39.356h60.061l13.256 39.356Zm-65.461-62.675 21.602-64.311h1.227l21.602 64.311h-44.431Zm126.831-7.527v70.202h-28.23V71.839h27.002v20.374h1.392c2.782-6.71 7.2-12.028 13.255-15.956 6.056-3.927 13.584-5.89 22.503-5.89 8.264 0 15.465 1.8 21.684 5.318 6.137 3.518 10.964 8.673 14.319 15.382 3.437 6.71 5.074 14.81 4.992 24.383v76.175h-28.23v-71.92c0-8.019-2.046-14.237-6.219-18.819-4.173-4.5-9.819-6.791-17.102-6.791-4.91 0-9.328 1.063-13.174 3.272-3.846 2.128-6.792 5.237-9.001 9.328-2.046 4.009-3.191 8.918-3.191 14.728ZM589.233 239c-10.147 0-18.82-1.391-26.103-4.091-7.282-2.7-13.092-6.382-17.511-10.964-4.418-4.582-7.528-9.655-9.164-15.219l25.448-6.136c1.145 2.372 2.782 4.663 4.991 6.954 2.209 2.291 5.155 4.255 8.837 5.81 3.683 1.554 8.428 2.291 14.074 2.291 8.019 0 14.647-1.964 19.884-5.81 5.237-3.845 7.856-10.227 7.856-19.064v-22.665h-1.391c-1.473 2.946-3.601 5.892-6.383 9.001-2.782 3.109-6.464 5.645-10.965 7.691-4.582 2.046-10.228 3.109-17.101 3.109-9.165 0-17.511-2.209-25.039-6.545-7.446-4.337-13.42-10.883-17.757-19.474-4.418-8.673-6.628-19.473-6.628-32.565 0-13.091 2.21-24.301 6.628-33.383 4.419-9.082 10.311-15.955 17.839-20.7 7.528-4.746 15.874-7.037 25.039-7.037 7.037 0 12.846 1.145 17.347 3.518 4.582 2.373 8.182 5.236 10.883 8.51 2.7 3.272 4.746 6.382 6.137 9.327h1.554v-19.8h27.821v121.749c0 10.228-2.454 18.737-7.364 25.447-4.91 6.709-11.538 11.7-20.048 15.055-8.509 3.355-18.165 4.991-28.884 4.991Zm.245-71.266c5.974 0 11.047-1.473 15.302-4.337 4.173-2.945 7.446-7.118 9.573-12.519 2.21-5.482 3.274-12.027 3.274-19.637 0-7.609-1.064-14.155-3.274-19.8-2.127-5.646-5.318-10.064-9.491-13.255-4.174-3.11-9.329-4.746-15.384-4.746s-11.537 1.636-15.792 4.91c-4.173 3.272-7.365 7.772-9.492 13.418-2.128 5.727-3.191 12.191-3.191 19.392 0 7.2 1.063 13.745 3.273 19.228 2.127 5.482 5.318 9.736 9.573 12.764 4.174 3.027 9.41 4.582 15.629 4.582Zm141.56-26.51V71.839h28.23v119.786h-27.412v-21.273h-1.227c-2.7 6.709-7.119 12.191-13.338 16.446-6.137 4.255-13.747 6.382-22.748 6.382-7.855 0-14.81-1.718-20.783-5.237-5.974-3.518-10.72-8.591-14.075-15.382-3.355-6.709-5.073-14.891-5.073-24.464V71.839h28.312v71.921c0 7.609 2.046 13.664 6.219 18.083 4.173 4.5 9.655 6.709 16.365 6.709 4.173 0 8.183-.982 12.111-3.028 3.927-2.045 7.118-5.072 9.655-9.082 2.537-4.091 3.764-9.164 3.764-15.218Zm65.707-109.395v159.796h-28.23V31.828h28.23Zm44.841 162.169c-7.61 0-14.402-1.391-20.457-4.091-6.055-2.7-10.883-6.791-14.32-12.109-3.518-5.319-5.237-11.946-5.237-19.801 0-6.791 1.228-12.355 3.765-16.773 2.536-4.419 5.891-7.937 10.228-10.637 4.337-2.618 9.164-4.664 14.647-6.055 5.4-1.391 11.046-2.373 16.856-3.027 7.037-.737 12.683-1.391 17.102-1.964 4.337-.573 7.528-1.555 9.574-2.782 1.963-1.309 3.027-3.273 3.027-5.973v-.491c0-5.891-1.718-10.391-5.237-13.664-3.518-3.191-8.51-4.828-15.056-4.828-6.955 0-12.356 1.473-16.447 4.5-4.009 3.028-6.71 6.546-8.183 10.719l-26.348-3.764c2.046-7.282 5.483-13.336 10.31-18.328 4.746-4.909 10.638-8.59 17.511-11.045 6.955-2.455 14.565-3.682 22.912-3.682 5.809 0 11.537.654 17.265 2.045s10.965 3.6 15.711 6.71c4.746 3.109 8.51 7.282 11.455 12.6 2.864 5.318 4.337 11.946 4.337 19.883v80.184h-27.166v-16.446h-.9c-1.719 3.355-4.092 6.464-7.201 9.328-3.109 2.864-6.955 5.237-11.619 6.955-4.828 1.718-10.229 2.536-16.529 2.536Zm7.364-20.701c5.646 0 10.556-1.145 14.729-3.354 4.173-2.291 7.364-5.237 9.655-9.001 2.292-3.763 3.355-7.854 3.355-12.273v-14.155c-.9.737-2.373 1.391-4.5 2.046-2.128.654-4.419 1.145-7.037 1.636-2.619.491-5.155.9-7.692 1.227-2.537.328-4.746.655-6.628.901-4.173.572-8.019 1.472-11.292 2.781-3.355 1.31-5.973 3.11-7.855 5.401-1.964 2.291-2.864 5.318-2.864 8.918 0 5.237 1.882 9.164 5.728 11.782 3.682 2.782 8.51 4.091 14.401 4.091Zm64.643 18.328V71.839h27.412v19.965h1.227c2.21-6.955 5.974-12.274 11.292-16.038 5.319-3.763 11.456-5.645 18.329-5.645 1.555 0 3.355.082 5.237.163 1.964.164 3.601.328 4.91.573v25.938c-1.227-.41-3.109-.819-5.646-1.146a58.814 58.814 0 0 0-7.446-.49c-5.155 0-9.738 1.145-13.829 3.354-4.091 2.209-7.282 5.236-9.655 9.164-2.373 3.927-3.519 8.427-3.519 13.5v70.448h-28.312ZM222.077 39.192l-8.019 125.923L137.387 0l84.69 39.192Zm-53.105 162.825-57.933 33.056-57.934-33.056 11.783-28.556h92.301l11.783 28.556ZM111.039 62.675l30.357 73.803H80.681l30.358-73.803ZM7.937 165.115 0 39.192 84.69 0 7.937 165.115Z"
-          />
-        </g>
-        <defs>
-          <radialGradient
-            id="c"
-            cx="0"
-            cy="0"
-            r="1"
-            gradientTransform="rotate(118.122 171.182 60.81) scale(205.794)"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stop-color="#FF41F8" />
-            <stop offset=".707" stop-color="#FF41F8" stop-opacity=".5" />
-            <stop offset="1" stop-color="#FF41F8" stop-opacity="0" />
-          </radialGradient>
-          <linearGradient
-            id="b"
-            x1="0"
-            x2="982"
-            y1="192"
-            y2="192"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stop-color="#F0060B" />
-            <stop offset="0" stop-color="#F0070C" />
-            <stop offset=".526" stop-color="#CC26D5" />
-            <stop offset="1" stop-color="#7702FF" />
-          </linearGradient>
-          <clipPath id="a"><path fill="#fff" d="M0 0h982v239H0z" /></clipPath>
-        </defs>
-      </svg>
-      <h1>Hello, {{ title() }}</h1>
-      <p>Congratulations! Your app is running. 🎉</p>
-    </div>
-    <div class="divider" role="separator" aria-label="Divider"></div>
-    <div class="right-side">
-      <div class="pill-group">
-        @for (item of [
-          { title: 'Explore the Docs', link: 'https://angular.dev' },
-          { title: 'Learn with Tutorials', link: 'https://angular.dev/tutorials' },
-          { title: 'Prompt and best practices for AI', link: 'https://angular.dev/ai/develop-with-ai'},
-          { title: 'CLI Docs', link: 'https://angular.dev/tools/cli' },
-          { title: 'Angular Language Service', link: 'https://angular.dev/tools/language-service' },
-          { title: 'Angular DevTools', link: 'https://angular.dev/tools/devtools' },
-        ]; track item.title) {
-          <a
-            class="pill"
-            [href]="item.link"
-            target="_blank"
-            rel="noopener"
-          >
-            <span>{{ item.title }}</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              height="14"
-              viewBox="0 -960 960 960"
-              width="14"
-              fill="currentColor"
-            >
-              <path
-                d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h560v-280h80v280q0 33-23.5 56.5T760-120H200Zm188-212-56-56 372-372H560v-80h280v280h-80v-144L388-332Z"
-              />
-            </svg>
-          </a>
-        }
-      </div>
-      <div class="social-links">
-        <a
-          href="https://github.com/angular/angular"
-          aria-label="Github"
-          target="_blank"
-          rel="noopener"
-        >
-          <svg
-            width="25"
-            height="24"
-            viewBox="0 0 25 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            alt="Github"
-          >
-            <path
-              d="M12.3047 0C5.50634 0 0 5.50942 0 12.3047C0 17.7423 3.52529 22.3535 8.41332 23.9787C9.02856 24.0946 9.25414 23.7142 9.25414 23.3871C9.25414 23.0949 9.24389 22.3207 9.23876 21.2953C5.81601 22.0377 5.09414 19.6444 5.09414 19.6444C4.53427 18.2243 3.72524 17.8449 3.72524 17.8449C2.61064 17.082 3.81137 17.0973 3.81137 17.0973C5.04697 17.1835 5.69604 18.3647 5.69604 18.3647C6.79321 20.2463 8.57636 19.7029 9.27978 19.3881C9.39052 18.5924 9.70736 18.0499 10.0591 17.7423C7.32641 17.4347 4.45429 16.3765 4.45429 11.6618C4.45429 10.3185 4.9311 9.22133 5.72065 8.36C5.58222 8.04931 5.16694 6.79833 5.82831 5.10337C5.82831 5.10337 6.85883 4.77319 9.2121 6.36459C10.1965 6.09082 11.2424 5.95546 12.2883 5.94931C13.3342 5.95546 14.3801 6.09082 15.3644 6.36459C17.7023 4.77319 18.7328 5.10337 18.7328 5.10337C19.3942 6.79833 18.9789 8.04931 18.8559 8.36C19.6403 9.22133 20.1171 10.3185 20.1171 11.6618C20.1171 16.3888 17.2409 17.4296 14.5031 17.7321C14.9338 18.1012 15.3337 18.8559 15.3337 20.0084C15.3337 21.6552 15.3183 22.978 15.3183 23.3779C15.3183 23.7009 15.5336 24.0854 16.1642 23.9623C21.0871 22.3484 24.6094 17.7341 24.6094 12.3047C24.6094 5.50942 19.0999 0 12.3047 0Z"
-            />
-          </svg>
-        </a>
-        <a
-          href="https://twitter.com/angular"
-          aria-label="Twitter"
-          target="_blank"
-          rel="noopener"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            alt="Twitter"
-          >
-            <path
-              d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-            />
-          </svg>
-        </a>
-        <a
-          href="https://www.youtube.com/channel/UCbn1OgGei-DV7aSRo_HaAiw"
-          aria-label="Youtube"
-          target="_blank"
-          rel="noopener"
-        >
-          <svg
-            width="29"
-            height="20"
-            viewBox="0 0 29 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            alt="Youtube"
-          >
-            <path
-              fill-rule="evenodd"
-              clip-rule="evenodd"
-              d="M27.4896 1.52422C27.9301 1.96749 28.2463 2.51866 28.4068 3.12258C29.0004 5.35161 29.0004 10 29.0004 10C29.0004 10 29.0004 14.6484 28.4068 16.8774C28.2463 17.4813 27.9301 18.0325 27.4896 18.4758C27.0492 18.9191 26.5 19.2389 25.8972 19.4032C23.6778 20 14.8068 20 14.8068 20C14.8068 20 5.93586 20 3.71651 19.4032C3.11363 19.2389 2.56449 18.9191 2.12405 18.4758C1.68361 18.0325 1.36732 17.4813 1.20683 16.8774C0.613281 14.6484 0.613281 10 0.613281 10C0.613281 10 0.613281 5.35161 1.20683 3.12258C1.36732 2.51866 1.68361 1.96749 2.12405 1.52422C2.56449 1.08095 3.11363 0.76113 3.71651 0.596774C5.93586 0 14.8068 0 14.8068 0C14.8068 0 23.6778 0 25.8972 0.596774C26.5 0.76113 27.0492 1.08095 27.4896 1.52422ZM19.3229 10L11.9036 5.77905V14.221L19.3229 10Z"
-            />
-          </svg>
-        </a>
-      </div>
-    </div>
+<div class="app-container">
+  <app-header></app-header>
+  <div class="app-body">
+    <app-sidebar></app-sidebar>
+    <main class="main-content">
+      <router-outlet></router-outlet>
+    </main>
   </div>
-</main>
-
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * The content above * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * is only a placeholder * * * * * * * * * * * -->
-<!-- * * * * * * * * * * and can be replaced.  * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * End of Placeholder  * * * * * * * * * * * * -->
-<!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
-
-
-<router-outlet />
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/app.routes.ts
 --------------------------------------------------------------------------------
 import { Routes } from '@angular/router';
+import { Feed } from './pages/feed/feed';
+import { Login } from './features/auth/login/login';
+import { Signup } from './features/auth/signup/signup';
+import { PostDetail } from './features/posts/post-detail/post-detail';
+import { PostCreate } from './features/posts/post-create/post-create';
+import { Profile } from './features/user/profile/profile';
+import { Settings } from './features/user/settings/settings';
+import { NotFound } from './pages/not-found/not-found';
 
-export const routes: Routes = [];
+export const routes: Routes = [
+  { path: '', redirectTo: '/feed', pathMatch: 'full' },
+  { path: 'feed', component: Feed },
+  { path: 'login', component: Login },
+  { path: 'signup', component: Signup },
+  { path: 'post/:id', component: PostDetail },
+  { path: 'create-post', component: PostCreate },
+  { path: 'profile/:username', component: Profile },
+  { path: 'settings', component: Settings },
+  { path: '**', component: NotFound }
+];
 
 --------------------------------------------------------------------------------
 FILE: src/app/app.spec.ts
@@ -803,18 +531,20 @@ describe('App', () => {
 --------------------------------------------------------------------------------
 FILE: src/app/app.ts
 --------------------------------------------------------------------------------
-import { Component, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { Header } from './shared/components/header/header';
+import { Sidebar } from './shared/components/sidebar/sidebar';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  standalone: true,
+  imports: [CommonModule, RouterOutlet, Header, Sidebar],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App {
-  protected readonly title = signal('frontend');
-}
+export class App {}
 
 --------------------------------------------------------------------------------
 FILE: src/app/core/guards/admin-guard.ts
@@ -936,126 +666,1442 @@ export class Websocket {
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/login/login.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 32px;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.logo-icon {
+  font-size: 32px;
+}
+
+.logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary-orange);
+  margin: 0;
+}
+
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-input {
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.form-input:focus {
+  border-color: var(--primary-orange);
+  background-color: var(--bg-primary);
+}
+
+.form-input.error {
+  border-color: var(--error);
+}
+
+.password-input-wrapper {
+  position: relative;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.password-toggle:hover {
+  color: var(--text-primary);
+}
+
+.error-message {
+  font-size: 12px;
+  color: var(--error);
+  margin-top: 4px;
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-orange);
+}
+
+.forgot-link {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.forgot-link:hover {
+  text-decoration: underline;
+}
+
+.alert {
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.alert-error {
+  background-color: rgba(234, 0, 39, 0.1);
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+
+.submit-btn {
+  padding: 14px;
+  background-color: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: var(--primary-orange-light);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--border-primary);
+}
+
+.divider span {
+  position: relative;
+  padding: 0 16px;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.oauth-btn {
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.oauth-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-secondary);
+}
+
+.oauth-btn img {
+  width: 20px;
+  height: 20px;
+}
+
+.auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.auth-footer p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.auth-footer a {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/login/login.html
 --------------------------------------------------------------------------------
-<p>login works!</p>
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <span class="logo-icon">🔥</span>
+        <h1>MemeForum</h1>
+      </div>
+      <p class="auth-subtitle">Welcome back, meme lord!</p>
+    </div>
+    
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="auth-form">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          type="email" 
+          formControlName="email"
+          class="form-input"
+          placeholder="your@email.com"
+          [class.error]="isFieldInvalid('email')"
+        >
+        @if (isFieldInvalid('email')) {
+          <span class="error-message">Please enter a valid email</span>
+        }
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="password-input-wrapper">
+          <input 
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            class="form-input"
+            placeholder="••••••••"
+            [class.error]="isFieldInvalid('password')"
+          >
+          <button 
+            type="button"
+            class="password-toggle"
+            (click)="togglePassword()"
+          >
+            <span class="material-icons">
+              {{ showPassword() ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+        </div>
+        @if (isFieldInvalid('password')) {
+          <span class="error-message">Password is required</span>
+        }
+      </div>
+      
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="rememberMe">
+          <span>Remember me</span>
+        </label>
+        <a routerLink="/forgot-password" class="forgot-link">Forgot password?</a>
+      </div>
+      
+      @if (errorMessage()) {
+        <div class="alert alert-error">
+          {{ errorMessage() }}
+        </div>
+      }
+      
+      <button 
+        type="submit" 
+        class="submit-btn"
+        [disabled]="loginForm.invalid || isLoading()"
+      >
+        @if (isLoading()) {
+          <span class="spinner-small"></span>
+          <span>Logging in...</span>
+        } @else {
+          <span>Login</span>
+        }
+      </button>
+      
+      <div class="divider">
+        <span>OR</span>
+      </div>
+      
+      <button type="button" class="oauth-btn google" (click)="loginWithGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        <span>Continue with Google</span>
+      </button>
+      
+      <button type="button" class="oauth-btn github" (click)="loginWithGithub()">
+        <span class="material-icons">code</span>
+        <span>Continue with GitHub</span>
+      </button>
+    </form>
+    
+    <div class="auth-footer">
+      <p>New to MemeForum? <a routerLink="/signup">Create an account</a></p>
+    </div>
+  </div>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/login/login.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-login',
-  imports: [],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './login.html',
-  styleUrl: './login.css',
+  styleUrl: './login.css'
 })
 export class Login {
-
+  loginForm: FormGroup;
+  showPassword = signal(false);
+  isLoading = signal(false);
+  errorMessage = signal('');
+  
+  constructor(
+    private fb: FormBuilder,
+    private router: Router
+  ) {
+    this.loginForm = this.fb.group({
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(6)]],
+      rememberMe: [false]
+    });
+  }
+  
+  togglePassword() {
+    this.showPassword.update(v => !v);
+  }
+  
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.loginForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+  
+  async onSubmit() {
+    if (this.loginForm.invalid) {
+      Object.keys(this.loginForm.controls).forEach(key => {
+        this.loginForm.get(key)?.markAsTouched();
+      });
+      return;
+    }
+    
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // TODO: Implement actual login logic
+      console.log('Login data:', this.loginForm.value);
+      
+      this.router.navigate(['/feed']);
+    } catch (error) {
+      this.errorMessage.set('Invalid email or password');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+  
+  async loginWithGoogle() {
+    this.isLoading.set(true);
+    try {
+      // TODO: Implement Firebase Google auth
+      console.log('Login with Google');
+    } catch (error) {
+      this.errorMessage.set('Google login failed');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+  
+  async loginWithGithub() {
+    this.isLoading.set(true);
+    try {
+      // TODO: Implement Firebase GitHub auth
+      console.log('Login with GitHub');
+    } catch (error) {
+      this.errorMessage.set('GitHub login failed');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/signup/signup.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+/* Reuse all styles from login.css */
+/* Additional styles for signup */
+
+.password-strength {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 4px;
+  background-color: var(--bg-tertiary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  transition: width 0.3s, background-color 0.3s;
+}
+
+.strength-fill.weak {
+  background-color: var(--error);
+}
+
+.strength-fill.medium {
+  background-color: var(--warning);
+}
+
+.strength-fill.strong {
+  background-color: var(--success);
+}
+
+.strength-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 60px;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/signup/signup.html
 --------------------------------------------------------------------------------
-<p>signup works!</p>
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <span class="logo-icon">🔥</span>
+        <h1>MemeForum</h1>
+      </div>
+      <p class="auth-subtitle">Join the meme revolution!</p>
+    </div>
+    
+    <form [formGroup]="signupForm" (ngSubmit)="onSubmit()" class="auth-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input 
+          id="username"
+          type="text" 
+          formControlName="username"
+          class="form-input"
+          placeholder="memeLord420"
+          [class.error]="isFieldInvalid('username')"
+        >
+        @if (isFieldInvalid('username')) {
+          <span class="error-message">Username must be 3-20 characters</span>
+        }
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          type="email" 
+          formControlName="email"
+          class="form-input"
+          placeholder="your@email.com"
+          [class.error]="isFieldInvalid('email')"
+        >
+        @if (isFieldInvalid('email')) {
+          <span class="error-message">Please enter a valid email</span>
+        }
+      </div>
+      
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="password-input-wrapper">
+          <input 
+            id="password"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            class="form-input"
+            placeholder="••••••••"
+            [class.error]="isFieldInvalid('password')"
+          >
+          <button 
+            type="button"
+            class="password-toggle"
+            (click)="togglePassword()"
+          >
+            <span class="material-icons">
+              {{ showPassword() ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+        </div>
+        @if (isFieldInvalid('password')) {
+          <span class="error-message">Password must be at least 6 characters</span>
+        }
+        
+        <div class="password-strength">
+          <div class="strength-bar">
+            <div 
+              class="strength-fill" 
+              [style.width.%]="passwordStrength()"
+              [class.weak]="passwordStrength() <= 33"
+              [class.medium]="passwordStrength() > 33 && passwordStrength() <= 66"
+              [class.strong]="passwordStrength() > 66"
+            ></div>
+          </div>
+          <span class="strength-text">{{ getPasswordStrengthText() }}</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input 
+          id="confirmPassword"
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="confirmPassword"
+          class="form-input"
+          placeholder="••••••••"
+          [class.error]="isFieldInvalid('confirmPassword')"
+        >
+        @if (isFieldInvalid('confirmPassword')) {
+          <span class="error-message">Passwords do not match</span>
+        }
+      </div>
+      
+      <div class="form-options">
+        <label class="checkbox-label">
+          <input type="checkbox" formControlName="agreeToTerms">
+          <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a></span>
+        </label>
+      </div>
+      
+      @if (errorMessage()) {
+        <div class="alert alert-error">
+          {{ errorMessage() }}
+        </div>
+      }
+      
+      <button 
+        type="submit" 
+        class="submit-btn"
+        [disabled]="signupForm.invalid || isLoading()"
+      >
+        @if (isLoading()) {
+          <span class="spinner-small"></span>
+          <span>Creating account...</span>
+        } @else {
+          <span>Sign Up</span>
+        }
+      </button>
+      
+      <div class="divider">
+        <span>OR</span>
+      </div>
+      
+      <button type="button" class="oauth-btn google" (click)="signupWithGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+        <span>Sign up with Google</span>
+      </button>
+      
+      <button type="button" class="oauth-btn github" (click)="signupWithGithub()">
+        <span class="material-icons">code</span>
+        <span>Sign up with GitHub</span>
+      </button>
+    </form>
+    
+    <div class="auth-footer">
+      <p>Already have an account? <a routerLink="/login">Login</a></p>
+    </div>
+  </div>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/auth/signup/signup.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal, computed } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule, AbstractControl } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-signup',
-  imports: [],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './signup.html',
-  styleUrl: './signup.css',
+  styleUrl: './signup.css'
 })
 export class Signup {
-
+  signupForm: FormGroup;
+  showPassword = signal(false);
+  isLoading = signal(false);
+  errorMessage = signal('');
+  
+  passwordStrength = computed(() => {
+    const password = this.signupForm?.get('password')?.value || '';
+    if (!password) return 0;
+    
+    let strength = 0;
+    if (password.length >= 6) strength += 25;
+    if (password.length >= 10) strength += 25;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 25;
+    if (/[0-9]/.test(password)) strength += 12.5;
+    if (/[^a-zA-Z0-9]/.test(password)) strength += 12.5;
+    
+    return Math.min(100, strength);
+  });
+  
+  constructor(
+    private fb: FormBuilder,
+    private router: Router
+  ) {
+    this.signupForm = this.fb.group({
+      username: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(20)]],
+      email: ['', [Validators.required, Validators.email]],
+      password: ['', [Validators.required, Validators.minLength(6)]],
+      confirmPassword: ['', [Validators.required]],
+      agreeToTerms: [false, [Validators.requiredTrue]]
+    }, {
+      validators: this.passwordMatchValidator
+    });
+  }
+  
+  passwordMatchValidator(control: AbstractControl) {
+    const password = control.get('password');
+    const confirmPassword = control.get('confirmPassword');
+    
+    if (password?.value !== confirmPassword?.value) {
+      confirmPassword?.setErrors({ mismatch: true });
+      return { mismatch: true };
+    }
+    return null;
+  }
+  
+  togglePassword() {
+    this.showPassword.update(v => !v);
+  }
+  
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.signupForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+  
+  getPasswordStrengthText(): string {
+    const strength = this.passwordStrength();
+    if (strength <= 33) return 'Weak';
+    if (strength <= 66) return 'Medium';
+    return 'Strong';
+  }
+  
+  async onSubmit() {
+    if (this.signupForm.invalid) {
+      Object.keys(this.signupForm.controls).forEach(key => {
+        this.signupForm.get(key)?.markAsTouched();
+      });
+      return;
+    }
+    
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // TODO: Implement actual signup logic
+      console.log('Signup data:', this.signupForm.value);
+      
+      this.router.navigate(['/feed']);
+    } catch (error) {
+      this.errorMessage.set('Failed to create account. Please try again.');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+  
+  async signupWithGoogle() {
+    this.isLoading.set(true);
+    try {
+      // TODO: Implement Firebase Google auth
+      console.log('Signup with Google');
+    } catch (error) {
+      this.errorMessage.set('Google signup failed');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+  
+  async signupWithGithub() {
+    this.isLoading.set(true);
+    try {
+      // TODO: Implement Firebase GitHub auth
+      console.log('Signup with GitHub');
+    } catch (error) {
+      this.errorMessage.set('GitHub signup failed');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-form/comment-form.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.comment-form-container {
+  margin-bottom: 24px;
+}
+
+.comment-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.comment-as {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.comment-as strong {
+  color: var(--text-primary);
+}
+
+.comment-editor {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.comment-editor:focus-within {
+  border-color: var(--primary-orange);
+}
+
+.comment-textarea {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  min-height: 100px;
+}
+
+.comment-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.comment-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+}
+
+.toolbar-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.toolbar-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.toolbar-btn .material-icons {
+  font-size: 18px;
+}
+
+.comment-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancel-btn {
+  padding: 6px 16px;
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 20px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.submit-comment-btn {
+  padding: 6px 16px;
+  background-color: var(--primary-orange);
+  border: none;
+  border-radius: 20px;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.submit-comment-btn:hover:not(:disabled) {
+  background-color: var(--primary-orange-light);
+}
+
+.submit-comment-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-form/comment-form.html
 --------------------------------------------------------------------------------
-<p>comment-form works!</p>
+<div class="comment-form-container">
+  <div class="comment-form-header">
+    <app-user-avatar [size]="32"></app-user-avatar>
+    <span class="comment-as">Comment as <strong>{{ currentUser() }}</strong></span>
+  </div>
+  
+  <form [formGroup]="commentForm" (ngSubmit)="onSubmit()">
+    <div class="comment-editor">
+      <textarea
+        formControlName="content"
+        class="comment-textarea"
+        placeholder="What are your thoughts?"
+        rows="4"
+        [class.focused]="isFocused()"
+        (focus)="isFocused.set(true)"
+        (blur)="handleBlur()"
+      ></textarea>
+      
+      @if (isFocused() || commentForm.get('content')?.value) {
+        <div class="comment-toolbar">
+          <div class="toolbar-buttons">
+            <button type="button" class="toolbar-btn" title="Bold" (click)="formatText('bold')">
+              <span class="material-icons">format_bold</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Italic" (click)="formatText('italic')">
+              <span class="material-icons">format_italic</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Code" (click)="formatText('code')">
+              <span class="material-icons">code</span>
+            </button>
+            <button type="button" class="toolbar-btn" title="Link" (click)="formatText('link')">
+              <span class="material-icons">link</span>
+            </button>
+          </div>
+          
+          <div class="comment-actions">
+            @if (isReplying()) {
+              <button type="button" class="cancel-btn" (click)="cancel()">
+                Cancel
+              </button>
+            }
+            <button 
+              type="submit" 
+              class="submit-comment-btn"
+              [disabled]="commentForm.invalid || isSubmitting()"
+            >
+              @if (isSubmitting()) {
+                <span class="spinner-small"></span>
+              }
+              {{ isReplying() ? 'Reply' : 'Comment' }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  </form>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-form/comment-form.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
 
 @Component({
   selector: 'app-comment-form',
-  imports: [],
+  imports: [ReactiveFormsModule, UserAvatar],
   templateUrl: './comment-form.html',
-  styleUrl: './comment-form.css',
+  styleUrl: './comment-form.css'
 })
 export class CommentForm {
-
+  parentCommentId = input<string | null>(null);
+  isReplying = input<boolean>(false);
+  
+  submit = output<string>();
+  cancelReply = output<void>();
+  
+  commentForm: FormGroup;
+  isFocused = signal(false);
+  isSubmitting = signal(false);
+  currentUser = signal('currentUser'); // Will get from auth service
+  
+  constructor(private fb: FormBuilder) {
+    this.commentForm = this.fb.group({
+      content: ['', [Validators.required, Validators.minLength(1)]]
+    });
+  }
+  
+  async onSubmit() {
+    if (this.commentForm.invalid) return;
+    
+    this.isSubmitting.set(true);
+    const content = this.commentForm.get('content')?.value;
+    
+    // Emit the content
+    this.submit.emit(content);
+    
+    // Reset form
+    this.commentForm.reset();
+    this.isFocused.set(false);
+    this.isSubmitting.set(false);
+  }
+  
+  cancel() {
+    this.commentForm.reset();
+    this.isFocused.set(false);
+    this.cancelReply.emit();
+  }
+  
+  handleBlur() {
+    // Only unfocus if form is empty
+    if (!this.commentForm.get('content')?.value) {
+      this.isFocused.set(false);
+    }
+  }
+  
+  formatText(format: string) {
+    // Implement text formatting
+    console.log('Format:', format);
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-item/comment-item.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.comment-item {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.comment-thread-line {
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--border-primary);
+}
+
+.comment-content {
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.comment-author {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.comment-author:hover {
+  color: var(--primary-orange);
+  text-decoration: underline;
+}
+
+.op-badge {
+  padding: 2px 6px;
+  background-color: var(--primary-orange);
+  color: white;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.comment-time {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.comment-body {
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.comment-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.comment-action .material-icons {
+  font-size: 16px;
+}
+
+.reply-form-container {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.comment-replies {
+  margin-top: 16px;
+}
+
+/* Nested comment styling */
+.comment-item .comment-item .comment-content {
+  background-color: var(--bg-secondary);
+}
+
+/* Max nesting depth visual indicator */
+.comment-item[style*="margin-left: 120px"] .comment-thread-line {
+  background: linear-gradient(to bottom, var(--border-primary), transparent);
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-item/comment-item.html
 --------------------------------------------------------------------------------
-<p>comment-item works!</p>
+<div class="comment-item" [style.margin-left.px]="depth() * 24">
+  <div class="comment-thread-line" *ngIf="depth() > 0"></div>
+  
+  <div class="comment-content">
+    <div class="comment-header">
+      <app-user-avatar [username]="comment().author" [size]="24"></app-user-avatar>
+      <a [routerLink]="['/profile', comment().author]" class="comment-author">
+        {{ comment().author }}
+      </a>
+      @if (comment().isOP) {
+        <span class="op-badge">OP</span>
+      }
+      <span class="comment-time">{{ formatTime(comment().createdAt) }}</span>
+    </div>
+    
+    <div class="comment-body">
+      {{ comment().content }}
+    </div>
+    
+    <div class="comment-footer">
+      <app-vote-buttons
+        [upvotes]="comment().upvotes"
+        [downvotes]="comment().downvotes"
+        [orientation]="'horizontal'"
+        (vote)="onVoteClick($event)"
+      ></app-vote-buttons>
+      
+      <button class="comment-action" (click)="toggleReply()">
+        <span class="material-icons">reply</span>
+        <span>Reply</span>
+      </button>
+      
+      @if (canModerate()) {
+        <button class="comment-action" (click)="deleteComment()">
+          <span class="material-icons">delete</span>
+          <span>Delete</span>
+        </button>
+      }
+      
+      <button class="comment-action" (click)="reportComment()">
+        <span class="material-icons">flag</span>
+        <span>Report</span>
+      </button>
+    </div>
+    
+    @if (showReplyForm()) {
+      <div class="reply-form-container">
+        <app-comment-form
+          [isReplying]="true"
+          (submit)="submitReply($event)"
+          (cancelReply)="toggleReply()"
+        ></app-comment-form>
+      </div>
+    }
+    
+    @if (comment().replies && comment().replies.length > 0) {
+      <div class="comment-replies">
+        @for (reply of comment().replies; track reply.id) {
+          <app-comment-item
+            [comment]="reply"
+            [depth]="depth() + 1"
+            (reply)="onNestedReply($event)"
+            (vote)="onNestedVote($event)"
+            (delete)="onNestedDelete($event)"
+          ></app-comment-item>
+        }
+      </div>
+    }
+  </div>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-item/comment-item.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { NgIf } from '@angular/common';
+import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
+import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
+import { CommentForm } from '../comment-form/comment-form';
 
 @Component({
   selector: 'app-comment-item',
-  imports: [],
+  imports: [RouterLink, NgIf, UserAvatar, VoteButtons, CommentForm],
   templateUrl: './comment-item.html',
-  styleUrl: './comment-item.css',
+  styleUrl: './comment-item.css'
 })
 export class CommentItem {
-
+  // Inputs
+  comment = input.required<any>();
+  depth = input<number>(0);
+  
+  // Outputs
+  reply = output<{commentId: string, content: string}>();
+  vote = output<{commentId: string, voteType: 'up' | 'down'}>();
+  delete = output<string>();
+  
+  // Local state
+  showReplyForm = signal(false);
+  
+  // Toggle reply form visibility
+  toggleReply() {
+    this.showReplyForm.update(v => !v);
+  }
+  
+  // Submit a reply to this comment
+  submitReply(content: string) {
+    this.reply.emit({
+      commentId: this.comment().id,
+      content
+    });
+    this.showReplyForm.set(false);
+  }
+  
+  // Handle vote button click for this comment
+  onVoteClick(voteType: 'up' | 'down') {
+    this.vote.emit({
+      commentId: this.comment().id,
+      voteType
+    });
+  }
+  
+  // Handle nested reply event from child comments
+  onNestedReply(event: {commentId: string, content: string}) {
+    // Pass the event up to parent
+    this.reply.emit(event);
+  }
+  
+  // Handle nested vote event from child comments
+  onNestedVote(event: {commentId: string, voteType: 'up' | 'down'}) {
+    // Pass the event up to parent
+    this.vote.emit(event);
+  }
+  
+  // Handle nested delete event from child comments
+  onNestedDelete(commentId: string) {
+    // Pass the event up to parent
+    this.delete.emit(commentId);
+  }
+  
+  // Delete this comment
+  deleteComment() {
+    this.delete.emit(this.comment().id);
+  }
+  
+  // Report this comment
+  reportComment() {
+    console.log('Report comment:', this.comment().id);
+    // TODO: Implement report functionality
+  }
+  
+  // Check if current user can moderate
+  canModerate(): boolean {
+    // TODO: Check if user has permission to delete
+    // This should check against the auth service
+    return false;
+  }
+  
+  // Format timestamp
+  formatTime(date: Date): string {
+    const now = new Date();
+    const commentDate = new Date(date);
+    const diff = now.getTime() - commentDate.getTime();
+    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+    
+    if (years > 0) {
+      return `${years} year${years > 1 ? 's' : ''} ago`;
+    } else if (months > 0) {
+      return `${months} month${months > 1 ? 's' : ''} ago`;
+    } else if (days > 0) {
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    } else if (hours > 0) {
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else if (minutes > 0) {
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else {
+      return 'Just now';
+    }
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-thread/comment-thread.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.no-comments {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+}
+
+.no-comments .material-icons {
+  font-size: 48px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.no-comments p {
+  font-size: 14px;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-thread/comment-thread.html
 --------------------------------------------------------------------------------
-<p>comment-thread works!</p>
+<div class="comment-thread">
+  @for (comment of comments(); track comment.id) {
+    <app-comment-item 
+      [comment]="comment"
+      [depth]="0"
+      (reply)="handleReply($event)"
+      (vote)="handleVote($event)"
+      (delete)="handleDelete($event)"
+    ></app-comment-item>
+  } @empty {
+    <div class="no-comments">
+      <span class="material-icons">chat_bubble_outline</span>
+      <p>No comments yet. Be the first to share your thoughts!</p>
+    </div>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/comments/comment-thread/comment-thread.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output } from '@angular/core';
+import { CommentItem } from '../comment-item/comment-item';
 
 @Component({
   selector: 'app-comment-thread',
-  imports: [],
+  imports: [CommentItem],
   templateUrl: './comment-thread.html',
-  styleUrl: './comment-thread.css',
+  styleUrl: './comment-thread.css'
 })
 export class CommentThread {
-
+  comments = input.required<any[]>();
+  
+  reply = output<{commentId: string, content: string}>();
+  vote = output<{commentId: string, voteType: 'up' | 'down'}>();
+  delete = output<string>();
+  
+  handleReply(event: {commentId: string, content: string}) {
+    this.reply.emit(event);
+  }
+  
+  handleVote(event: {commentId: string, voteType: 'up' | 'down'}) {
+    this.vote.emit(event);
+  }
+  
+  handleDelete(commentId: string) {
+    this.delete.emit(commentId);
+  }
 }
 
 --------------------------------------------------------------------------------
@@ -1073,51 +2119,348 @@ export class Comment {
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-bell/notification-bell.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.notification-bell-container {
+  position: relative;
+}
+
+.notification-bell {
+  position: relative;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.notification-bell:hover {
+  background-color: var(--bg-hover);
+}
+
+.notification-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background-color: var(--error);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 4px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 380px;
+  max-height: 480px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.notification-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.mark-all-read {
+  background: none;
+  border: none;
+  color: var(--primary-orange);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.mark-all-read:hover {
+  background-color: var(--bg-hover);
+}
+
+.notification-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 360px;
+}
+
+.empty-notifications {
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.empty-notifications .material-icons {
+  font-size: 48px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.notification-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border-primary);
+  text-align: center;
+}
+
+.view-all {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.view-all:hover {
+  text-decoration: underline;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-bell/notification-bell.html
 --------------------------------------------------------------------------------
-<p>notification-bell works!</p>
+<div class="notification-bell-container">
+  <button 
+    class="notification-bell" 
+    (click)="toggleNotifications()"
+    [attr.aria-label]="'Notifications'"
+  >
+    <span class="material-icons">{{ hasUnread() ? 'notifications_active' : 'notifications' }}</span>
+    @if (unreadCount() > 0) {
+      <span class="notification-badge">{{ formatCount(unreadCount()) }}</span>
+    }
+  </button>
+  
+  @if (isOpen()) {
+    <div class="notification-dropdown" (clickOutside)="close()">
+      <div class="notification-header">
+        <h3>Notifications</h3>
+        @if (unreadCount() > 0) {
+          <button class="mark-all-read" (click)="markAllAsRead()">
+            Mark all as read
+          </button>
+        }
+      </div>
+      
+      <div class="notification-list">
+        @if (notifications().length > 0) {
+          @for (notification of notifications(); track notification.id) {
+            <app-notification-item 
+              [notification]="notification"
+              (click)="handleNotificationClick(notification)"
+            ></app-notification-item>
+          }
+        } @else {
+          <div class="empty-notifications">
+            <span class="material-icons">notifications_none</span>
+            <p>No notifications yet</p>
+          </div>
+        }
+      </div>
+      
+      <div class="notification-footer">
+        <a routerLink="/notifications" class="view-all">View all notifications</a>
+      </div>
+    </div>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-bell/notification-bell.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { NotificationItem } from '../notification-item/notification-item';
 
 @Component({
   selector: 'app-notification-bell',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule, RouterLink, NotificationItem],
   templateUrl: './notification-bell.html',
-  styleUrl: './notification-bell.css',
+  styleUrl: './notification-bell.css'
 })
 export class NotificationBell {
-
+  isOpen = signal(false);
+  notifications = signal<any[]>([]);
+  unreadCount = signal(0);
+  hasUnread = signal(false);
+  
+  toggleNotifications() {
+    this.isOpen.update(v => !v);
+  }
+  
+  close() {
+    this.isOpen.set(false);
+  }
+  
+  markAllAsRead() {
+    this.unreadCount.set(0);
+    this.hasUnread.set(false);
+  }
+  
+  handleNotificationClick(notification: any) {
+    console.log('Notification clicked:', notification);
+  }
+  
+  formatCount(count: number): string {
+    return count > 99 ? '99+' : count.toString();
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-item/notification-item.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.notification-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.notification-item.unread {
+  background-color: rgba(255, 69, 0, 0.05);
+}
+
+.notification-icon {
+  width: 36px;
+  height: 36px;
+  background-color: var(--bg-tertiary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notification-icon .material-icons {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0 0 4px 0;
+  word-break: break-word;
+}
+
+.notification-time {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.unread-indicator {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary-orange);
+  border-radius: 50%;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-item/notification-item.html
 --------------------------------------------------------------------------------
-<p>notification-item works!</p>
+<div class="notification-item" [class.unread]="!notification().read" (click)="handleClick()">
+  <div class="notification-icon">
+    @switch (notification().type) {
+      @case ('comment') {
+        <span class="material-icons">comment</span>
+      }
+      @case ('upvote') {
+        <span class="material-icons">thumb_up</span>
+      }
+      @case ('mention') {
+        <span class="material-icons">alternate_email</span>
+      }
+      @case ('post') {
+        <span class="material-icons">article</span>
+      }
+      @default {
+        <span class="material-icons">notifications</span>
+      }
+    }
+  </div>
+  
+  <div class="notification-content">
+    <p class="notification-message">{{ notification().message }}</p>
+    <span class="notification-time">{{ formatTime(notification().createdAt) }}</span>
+  </div>
+  
+  @if (!notification().read) {
+    <span class="unread-indicator"></span>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/notifications/notification-item/notification-item.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-notification-item',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './notification-item.html',
-  styleUrl: './notification-item.css',
+  styleUrl: './notification-item.css'
 })
 export class NotificationItem {
-
+  notification = input.required<any>();
+  
+  click = output<any>();
+  
+  handleClick() {
+    this.click.emit(this.notification());
+  }
+  
+  formatTime(date: Date): string {
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
+  }
 }
 
 --------------------------------------------------------------------------------
@@ -1148,76 +2491,1160 @@ export class NotificationList {
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-card/post-card.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.post-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  margin-bottom: 16px;
+  display: flex;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.post-card:hover {
+  border-color: var(--border-secondary);
+}
+
+.post-votes {
+  padding: 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px 0 0 4px;
+}
+
+.post-content {
+  flex: 1;
+  padding: 12px;
+}
+
+.post-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.post-author {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.post-separator {
+  color: var(--text-muted);
+}
+
+.post-tag {
+  padding: 2px 8px;
+  background-color: var(--primary-orange);
+  color: white;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.post-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.post-image-container {
+  margin: 12px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  max-height: 512px;
+}
+
+.post-image {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.post-description {
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.post-footer {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.post-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.post-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.post-action .material-icons {
+  font-size: 18px;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-card/post-card.html
 --------------------------------------------------------------------------------
-<p>post-card works!</p>
+<article class="post-card" (click)="navigateToPost()">
+  <div class="post-votes">
+    <app-vote-buttons 
+      [upvotes]="post().upvotes"
+      [downvotes]="post().downvotes"
+      [userVote]="userVote()"
+      (vote)="handleVote($event)"
+    ></app-vote-buttons>
+  </div>
+  
+  <div class="post-content">
+    <div class="post-header">
+      <app-user-avatar [size]="20"></app-user-avatar>
+      <span class="post-author">{{ post().author }}</span>
+      <span class="post-separator">•</span>
+      <span class="post-time">{{ formatTime(post().createdAt) }}</span>
+      @if (post().tag) {
+        <span class="post-tag">{{ post().tag }}</span>
+      }
+    </div>
+    
+    <h2 class="post-title">{{ post().title }}</h2>
+    
+    @if (post().imageUrl) {
+      <div class="post-image-container">
+        <img [src]="post().imageUrl" [alt]="post().title" class="post-image">
+      </div>
+    }
+    
+    @if (post().description) {
+      <p class="post-description">{{ post().description }}</p>
+    }
+    
+    <div class="post-footer">
+      <button class="post-action" (click)="openComments($event)">
+        <span class="material-icons">comment</span>
+        <span>{{ post().commentCount }} Comments</span>
+      </button>
+      
+      <button class="post-action" (click)="share($event)">
+        <span class="material-icons">share</span>
+        <span>Share</span>
+      </button>
+      
+      <button class="post-action" (click)="toggleFavorite($event)">
+        <span class="material-icons">{{ isFavorite() ? 'bookmark' : 'bookmark_border' }}</span>
+        <span>Save</span>
+      </button>
+    </div>
+  </div>
+</article>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-card/post-card.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
+import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
 
 @Component({
   selector: 'app-post-card',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule, VoteButtons, UserAvatar],
   templateUrl: './post-card.html',
-  styleUrl: './post-card.css',
+  styleUrl: './post-card.css'
 })
 export class PostCard {
-
+  post = input.required<any>();
+  userVote = signal<'up' | 'down' | null>(null);
+  isFavorite = signal(false);
+  
+  constructor(private router: Router) {}
+  
+  navigateToPost() {
+    this.router.navigate(['/post', this.post().id]);
+  }
+  
+  handleVote(vote: 'up' | 'down') {
+    console.log('Vote:', vote);
+  }
+  
+  openComments(event: Event) {
+    event.stopPropagation();
+    this.navigateToPost();
+  }
+  
+  share(event: Event) {
+    event.stopPropagation();
+    console.log('Share post');
+  }
+  
+  toggleFavorite(event: Event) {
+    event.stopPropagation();
+    this.isFavorite.update(v => !v);
+  }
+  
+  formatTime(date: string): string {
+    return '2 hours ago';
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-create/post-create.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.create-post-container {
+  max-width: 700px;
+  margin: 0 auto;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.create-post-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.create-post-header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.post-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--primary-orange);
+  background-color: var(--bg-primary);
+}
+
+.form-input.error,
+.form-textarea.error {
+  border-color: var(--error);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.char-count {
+  position: absolute;
+  right: 12px;
+  bottom: -20px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.error-message {
+  font-size: 12px;
+  color: var(--error);
+}
+
+.image-upload-area {
+  position: relative;
+  min-height: 200px;
+  background-color: var(--bg-tertiary);
+  border: 2px dashed var(--border-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-upload-area:hover,
+.image-upload-area.drag-over {
+  border-color: var(--primary-orange);
+  background-color: rgba(255, 69, 0, 0.05);
+}
+
+.image-upload-area.has-image {
+  border-style: solid;
+}
+
+.upload-placeholder {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.upload-placeholder .material-icons {
+  font-size: 48px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.upload-placeholder p {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 4px;
+}
+
+.remove-image {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.remove-image:hover {
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.cancel-btn {
+  padding: 10px 24px;
+  background: none;
+  border: 1px solid var(--border-primary);
+  border-radius: 20px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.submit-btn {
+  padding: 10px 24px;
+  background-color: var(--primary-orange);
+  border: none;
+  border-radius: 20px;
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: var(--primary-orange-light);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-create/post-create.html
 --------------------------------------------------------------------------------
-<p>post-create works!</p>
+<div class="create-post-container">
+  <div class="create-post-header">
+    <h1>Create a Post</h1>
+    <button class="close-btn" routerLink="/feed">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+  
+  <form [formGroup]="postForm" (ngSubmit)="onSubmit()" class="post-form">
+    <div class="form-group">
+      <label for="title">Title *</label>
+      <input
+        id="title"
+        type="text"
+        formControlName="title"
+        class="form-input"
+        placeholder="An interesting title..."
+        [class.error]="isFieldInvalid('title')"
+      >
+      <span class="char-count">{{ titleLength() }}/300</span>
+      @if (isFieldInvalid('title')) {
+        <span class="error-message">Title is required (min 3 characters)</span>
+      }
+    </div>
+    
+    <div class="form-group">
+      <label for="tag">Tag</label>
+      <select id="tag" formControlName="tag" class="form-select">
+        <option value="">Select a tag (optional)</option>
+        @for (tag of tags(); track tag) {
+          <option [value]="tag">{{ tag }}</option>
+        }
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="image">Image</label>
+      <div class="image-upload-area" 
+           [class.has-image]="imagePreview()"
+           (click)="fileInput.click()"
+           (drop)="onDrop($event)"
+           (dragover)="onDragOver($event)"
+           (dragleave)="onDragLeave($event)"
+           [class.drag-over]="isDragging()">
+        
+        @if (imagePreview()) {
+          <img [src]="imagePreview()" alt="Preview" class="image-preview">
+          <button type="button" class="remove-image" (click)="removeImage($event)">
+            <span class="material-icons">close</span>
+          </button>
+        } @else {
+          <div class="upload-placeholder">
+            <span class="material-icons">image</span>
+            <p>Click or drag image here</p>
+            <span class="upload-hint">PNG, JPG, GIF up to 10MB</span>
+          </div>
+        }
+        
+        <input
+          #fileInput
+          type="file"
+          accept="image/*"
+          (change)="onFileSelected($event)"
+          style="display: none"
+        >
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label for="description">Description</label>
+      <textarea
+        id="description"
+        formControlName="description"
+        class="form-textarea"
+        placeholder="Add some context... (optional)"
+        rows="4"
+      ></textarea>
+      <span class="char-count">{{ descriptionLength() }}/1000</span>
+    </div>
+    
+    <div class="form-actions">
+      <button type="button" class="cancel-btn" routerLink="/feed">
+        Cancel
+      </button>
+      <button
+        type="submit"
+        class="submit-btn"
+        [disabled]="postForm.invalid || isSubmitting()"
+      >
+        @if (isSubmitting()) {
+          <span class="spinner-small"></span>
+          <span>Posting...</span>
+        } @else {
+          <span>Post</span>
+        }
+      </button>
+    </div>
+  </form>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-create/post-create.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal, computed } from '@angular/core';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Router, RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-post-create',
-  imports: [],
+  imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './post-create.html',
-  styleUrl: './post-create.css',
+  styleUrl: './post-create.css'
 })
 export class PostCreate {
-
+  postForm: FormGroup;
+  imagePreview = signal<string | null>(null);
+  selectedFile = signal<File | null>(null);
+  isDragging = signal(false);
+  isSubmitting = signal(false);
+  
+  tags = signal([
+    'Funny', 'Gaming', 'Programming', 'Dank', 'Wholesome',
+    'Tech', 'Science', 'Politics', 'Sports', 'Music'
+  ]);
+  
+  titleLength = computed(() => this.postForm?.get('title')?.value?.length || 0);
+  descriptionLength = computed(() => this.postForm?.get('description')?.value?.length || 0);
+  
+  constructor(
+    private fb: FormBuilder,
+    private router: Router
+  ) {
+    this.postForm = this.fb.group({
+      title: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(300)]],
+      tag: [''],
+      description: ['', [Validators.maxLength(1000)]]
+    });
+  }
+  
+  isFieldInvalid(fieldName: string): boolean {
+    const field = this.postForm.get(fieldName);
+    return !!(field && field.invalid && (field.dirty || field.touched));
+  }
+  
+  onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      this.handleFile(input.files[0]);
+    }
+  }
+  
+  onDrop(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging.set(false);
+    
+    if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
+      this.handleFile(event.dataTransfer.files[0]);
+    }
+  }
+  
+  onDragOver(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging.set(true);
+  }
+  
+  onDragLeave(event: DragEvent) {
+    event.preventDefault();
+    this.isDragging.set(false);
+  }
+  
+  handleFile(file: File) {
+    if (file.type.startsWith('image/') && file.size <= 10 * 1024 * 1024) {
+      this.selectedFile.set(file);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.imagePreview.set(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert('Please select an image file under 10MB');
+    }
+  }
+  
+  removeImage(event: Event) {
+    event.stopPropagation();
+    this.imagePreview.set(null);
+    this.selectedFile.set(null);
+  }
+  
+  async onSubmit() {
+    if (this.postForm.invalid) {
+      Object.keys(this.postForm.controls).forEach(key => {
+        this.postForm.get(key)?.markAsTouched();
+      });
+      return;
+    }
+    
+    this.isSubmitting.set(true);
+    
+    try {
+      const formData = new FormData();
+      formData.append('title', this.postForm.get('title')?.value);
+      formData.append('tag', this.postForm.get('tag')?.value || '');
+      formData.append('description', this.postForm.get('description')?.value || '');
+      
+      if (this.selectedFile()) {
+        formData.append('image', this.selectedFile()!);
+      }
+      
+      // TODO: Submit to API
+      console.log('Submitting post:', this.postForm.value);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      this.router.navigate(['/feed']);
+    } catch (error) {
+      console.error('Error creating post:', error);
+    } finally {
+      this.isSubmitting.set(false);
+    }
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-detail/post-detail.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.post-detail-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.post-detail {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.post-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.post-meta {
+  display: flex;
+  gap: 12px;
+}
+
+.post-meta-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.post-author {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.post-author:hover {
+  color: var(--primary-orange);
+  text-decoration: underline;
+}
+
+.post-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.post-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.action-btn.danger:hover {
+  background-color: rgba(234, 0, 39, 0.1);
+  color: var(--error);
+}
+
+.post-detail-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+
+.post-detail-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: var(--primary-orange);
+  color: white;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.post-detail-image {
+  margin: 24px 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.post-detail-image img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.post-detail-description {
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  white-space: pre-wrap;
+}
+
+.post-detail-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.post-detail-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.post-detail-action:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.comments-section {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.comments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.comments-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.comment-sort {
+  padding: 8px 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+}
+
+.login-prompt {
+  padding: 24px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-prompt p {
+  color: var(--text-secondary);
+}
+
+.login-prompt a {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.login-prompt a:hover {
+  text-decoration: underline;
+}
+
+.error-state {
+  text-align: center;
+  padding: 60px 20px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+}
+
+.error-state .material-icons {
+  font-size: 64px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.error-state h2 {
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.error-state p {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.back-btn {
+  padding: 10px 20px;
+  background-color: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.back-btn:hover {
+  background-color: var(--primary-orange-light);
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-detail/post-detail.html
 --------------------------------------------------------------------------------
-<p>post-detail works!</p>
+<div class="post-detail-container">
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else if (post()) {
+    <article class="post-detail">
+      <div class="post-detail-header">
+        <div class="post-meta">
+          <app-user-avatar [username]="post().author" [size]="40"></app-user-avatar>
+          <div class="post-meta-info">
+            <a [routerLink]="['/profile', post().author]" class="post-author">
+              {{ post().author }}
+            </a>
+            <span class="post-time">{{ formatTime(post().createdAt) }}</span>
+          </div>
+        </div>
+        
+        @if (canModerate()) {
+          <div class="post-actions">
+            <button class="action-btn" (click)="editPost()">
+              <span class="material-icons">edit</span>
+            </button>
+            <button class="action-btn danger" (click)="deletePost()">
+              <span class="material-icons">delete</span>
+            </button>
+          </div>
+        }
+      </div>
+      
+      <h1 class="post-detail-title">{{ post().title }}</h1>
+      
+      @if (post().tag) {
+        <span class="post-detail-tag">{{ post().tag }}</span>
+      }
+      
+      @if (post().imageUrl) {
+        <div class="post-detail-image">
+          <img [src]="post().imageUrl" [alt]="post().title">
+        </div>
+      }
+      
+      @if (post().description) {
+        <div class="post-detail-description">{{ post().description }}</div>
+      }
+      
+      <div class="post-detail-footer">
+        <app-vote-buttons 
+          [upvotes]="post().upvotes"
+          [downvotes]="post().downvotes"
+          [orientation]="'horizontal'"
+          (vote)="handleVote($event)"
+        ></app-vote-buttons>
+        
+        <button class="post-detail-action" (click)="share()">
+          <span class="material-icons">share</span>
+          <span>Share</span>
+        </button>
+        
+        <button class="post-detail-action" (click)="toggleFavorite()">
+          <span class="material-icons">{{ isFavorite() ? 'bookmark' : 'bookmark_border' }}</span>
+          <span>Save</span>
+        </button>
+        
+        <button class="post-detail-action" (click)="report()">
+          <span class="material-icons">flag</span>
+          <span>Report</span>
+        </button>
+      </div>
+    </article>
+    
+    <section class="comments-section">
+      <div class="comments-header">
+        <h2>Comments ({{ post().commentCount }})</h2>
+        <select class="comment-sort" [(ngModel)]="commentSort">
+          <option value="best">Best</option>
+          <option value="new">New</option>
+          <option value="top">Top</option>
+        </select>
+      </div>
+      
+      @if (isAuthenticated()) {
+        <app-comment-form 
+          (submit)="addComment($event)"
+        ></app-comment-form>
+      } @else {
+        <div class="login-prompt">
+          <p>Please <a routerLink="/login">login</a> to comment</p>
+        </div>
+      }
+      
+      <div class="comments-list">
+        <app-comment-thread 
+          [comments]="comments()"
+        ></app-comment-thread>
+      </div>
+    </section>
+  } @else {
+    <div class="error-state">
+      <span class="material-icons">error_outline</span>
+      <h2>Post not found</h2>
+      <p>This post may have been deleted or you don't have permission to view it.</p>
+      <button routerLink="/feed" class="back-btn">Back to Feed</button>
+    </div>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/features/posts/post-detail/post-detail.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal, OnInit } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
+import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
+import { LoadingSpinner } from '../../../shared/components/loading-spinner/loading-spinner';
+import { CommentForm } from '../../comments/comment-form/comment-form';
+import { CommentThread } from '../../comments/comment-thread/comment-thread';
 
 @Component({
   selector: 'app-post-detail',
-  imports: [],
+  imports: [
+    RouterLink,
+    FormsModule,
+    VoteButtons,
+    UserAvatar,
+    LoadingSpinner,
+    CommentForm,
+    CommentThread
+  ],
   templateUrl: './post-detail.html',
-  styleUrl: './post-detail.css',
+  styleUrl: './post-detail.css'
 })
-export class PostDetail {
-
+export class PostDetail implements OnInit {
+  post = signal<any>(null);
+  comments = signal<any[]>([]);
+  isLoading = signal(true);
+  isFavorite = signal(false);
+  isAuthenticated = signal(false); // Will connect to auth service
+  commentSort = 'best';
+  
+  constructor(private route: ActivatedRoute) {}
+  
+  ngOnInit() {
+    const postId = this.route.snapshot.paramMap.get('id');
+    this.loadPost(postId);
+    this.loadComments(postId);
+  }
+  
+  loadPost(postId: string | null) {
+    // Mock data
+    setTimeout(() => {
+      this.post.set({
+        id: postId,
+        title: 'When you fix a bug but create 3 more',
+        author: 'debugger420',
+        imageUrl: 'https://via.placeholder.com/800x600',
+        description: 'Every developer\'s nightmare... You think you\'ve solved the problem, but then QA comes back with a list of new issues.',
+        upvotes: 1337,
+        downvotes: 42,
+        commentCount: 89,
+        createdAt: new Date().toISOString(),
+        tag: 'Programming'
+      });
+      this.isLoading.set(false);
+    }, 500);
+  }
+  
+  loadComments(postId: string | null) {
+    // Mock data
+    this.comments.set([
+      {
+        id: '1',
+        author: 'coder123',
+        content: 'This is so relatable! Happened to me yesterday.',
+        upvotes: 45,
+        downvotes: 2,
+        createdAt: new Date(),
+        replies: [
+          {
+            id: '2',
+            author: 'dev_guru',
+            content: 'Same here! The eternal struggle.',
+            upvotes: 12,
+            downvotes: 0,
+            createdAt: new Date(),
+            replies: []
+          }
+        ]
+      }
+    ]);
+  }
+  
+  canModerate(): boolean {
+    // Check if user is author or has moderator/admin role
+    return false;
+  }
+  
+  handleVote(vote: 'up' | 'down') {
+    console.log('Vote:', vote);
+  }
+  
+  toggleFavorite() {
+    this.isFavorite.update(v => !v);
+  }
+  
+  share() {
+    // Implement share functionality
+  }
+  
+  report() {
+    // Implement report functionality
+  }
+  
+  editPost() {
+    // Implement edit functionality
+  }
+  
+  deletePost() {
+    // Implement delete functionality
+  }
+  
+  addComment(content: string) {
+    console.log('New comment:', content);
+    // Add comment logic
+  }
+  
+  formatTime(date: string): string {
+    return '2 hours ago';
+  }
 }
 
 --------------------------------------------------------------------------------
@@ -1322,26 +3749,173 @@ export class Settings {
 --------------------------------------------------------------------------------
 FILE: src/app/pages/feed/feed.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.feed-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.feed-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.feed-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-btn.active {
+  background-color: var(--primary-orange);
+  border-color: var(--primary-orange);
+  color: white;
+}
+
+.filter-btn .material-icons {
+  font-size: 18px;
+}
+
+.posts-list {
+  min-height: 400px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-state .material-icons {
+  font-size: 64px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/pages/feed/feed.html
 --------------------------------------------------------------------------------
-<p>feed works!</p>
+<div class="feed-container">
+  <div class="feed-header">
+    <h1 class="feed-title">{{ getFeedTitle() }}</h1>
+    <div class="feed-filters">
+      <button class="filter-btn" [class.active]="currentFilter() === 'hot'" (click)="setFilter('hot')">
+        <span class="material-icons">whatshot</span>
+        Hot
+      </button>
+      <button class="filter-btn" [class.active]="currentFilter() === 'new'" (click)="setFilter('new')">
+        <span class="material-icons">new_releases</span>
+        New
+      </button>
+      <button class="filter-btn" [class.active]="currentFilter() === 'top'" (click)="setFilter('top')">
+        <span class="material-icons">trending_up</span>
+        Top
+      </button>
+    </div>
+  </div>
+  
+  <div class="posts-list">
+    @for (post of posts(); track post.id) {
+      <app-post-card [post]="post"></app-post-card>
+    } @empty {
+      <div class="empty-state">
+        <span class="material-icons">article</span>
+        <p>No posts yet. Be the first to share a meme!</p>
+      </div>
+    }
+  </div>
+  
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/pages/feed/feed.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal, OnInit } from '@angular/core';
+import { PostCard } from '../../features/posts/post-card/post-card';
+import { LoadingSpinner } from '../../shared/components/loading-spinner/loading-spinner';
 
 @Component({
   selector: 'app-feed',
-  imports: [],
+  imports: [PostCard, LoadingSpinner],
   templateUrl: './feed.html',
-  styleUrl: './feed.css',
+  styleUrl: './feed.css'
 })
-export class Feed {
-
+export class Feed implements OnInit {
+  posts = signal<any[]>([]);
+  currentFilter = signal<'hot' | 'new' | 'top'>('hot');
+  isLoading = signal(false);
+  
+  ngOnInit() {
+    this.loadPosts();
+  }
+  
+  loadPosts() {
+    // Mock data for now
+    this.posts.set([
+      {
+        id: 1,
+        title: 'When you fix a bug but create 3 more',
+        author: 'debugger420',
+        imageUrl: 'https://via.placeholder.com/600x400',
+        description: 'Story of my life...',
+        upvotes: 1337,
+        downvotes: 42,
+        commentCount: 89,
+        createdAt: new Date().toISOString(),
+        tag: 'Programming'
+      },
+      {
+        id: 2,
+        title: 'Me trying to center a div',
+        author: 'css_warrior',
+        imageUrl: 'https://via.placeholder.com/600x400',
+        upvotes: 420,
+        downvotes: 13,
+        commentCount: 34,
+        createdAt: new Date().toISOString(),
+        tag: 'WebDev'
+      }
+    ]);
+  }
+  
+  setFilter(filter: 'hot' | 'new' | 'top') {
+    this.currentFilter.set(filter);
+    this.loadPosts();
+  }
+  
+  getFeedTitle(): string {
+    return 'Popular Memes';
+  }
 }
 
 --------------------------------------------------------------------------------
@@ -1397,176 +3971,1122 @@ export class NotFound {
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/confirm-dialog/confirm-dialog.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s;
+}
+
+.dialog-container {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  animation: slideUp 0.3s;
+}
+
+.dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.dialog-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.dialog-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dialog-body {
+  padding: 20px;
+}
+
+.dialog-body p {
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.dialog-btn {
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.dialog-btn.cancel {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.dialog-btn.cancel:hover {
+  background-color: var(--bg-hover);
+}
+
+.dialog-btn.confirm {
+  background-color: var(--primary-orange);
+  color: white;
+}
+
+.dialog-btn.confirm:hover {
+  background-color: var(--primary-orange-light);
+}
+
+.dialog-btn.confirm.danger {
+  background-color: var(--error);
+}
+
+.dialog-btn.confirm.danger:hover {
+  background-color: #ff1744;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/confirm-dialog/confirm-dialog.html
 --------------------------------------------------------------------------------
-<p>confirm-dialog works!</p>
+<div class="dialog-overlay" (click)="cancel()">
+  <div class="dialog-container" (click)="$event.stopPropagation()">
+    <div class="dialog-header">
+      <h2>{{ title() }}</h2>
+      <button class="dialog-close" (click)="cancel()">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    
+    <div class="dialog-body">
+      <p>{{ message() }}</p>
+    </div>
+    
+    <div class="dialog-footer">
+      <button class="dialog-btn cancel" (click)="cancel()">
+        {{ cancelText() }}
+      </button>
+      <button class="dialog-btn confirm" [class.danger]="isDanger()" (click)="confirm()">
+        {{ confirmText() }}
+      </button>
+    </div>
+  </div>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/confirm-dialog/confirm-dialog.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 
 @Component({
   selector: 'app-confirm-dialog',
-  imports: [],
   templateUrl: './confirm-dialog.html',
-  styleUrl: './confirm-dialog.css',
+  styleUrl: './confirm-dialog.css'
 })
 export class ConfirmDialog {
-
+  title = input<string>('Confirm Action');
+  message = input<string>('Are you sure you want to proceed?');
+  confirmText = input<string>('Confirm');
+  cancelText = input<string>('Cancel');
+  isDanger = input<boolean>(false);
+  
+  confirmed = output<void>();
+  cancelled = output<void>();
+  
+  confirm() {
+    this.confirmed.emit();
+  }
+  
+  cancel() {
+    this.cancelled.emit();
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/error-message/error-message.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.error-message-container {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 4px;
+  border: 1px solid;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.error-message-container.error-error {
+  background-color: rgba(234, 0, 39, 0.1);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.error-message-container.error-warning {
+  background-color: rgba(255, 214, 53, 0.1);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.error-message-container.error-info {
+  background-color: rgba(113, 147, 255, 0.1);
+  border-color: var(--downvote);
+  color: var(--downvote);
+}
+
+.error-message-container.error-success {
+  background-color: rgba(70, 209, 96, 0.1);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.error-content {
+  flex: 1;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.error-text {
+  font-size: 13px;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.dismiss-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.dismiss-btn:hover {
+  opacity: 1;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/error-message/error-message.html
 --------------------------------------------------------------------------------
-<p>error-message works!</p>
+<div class="error-message-container" [class]="'error-' + type()">
+  <span class="material-icons">{{ getIcon() }}</span>
+  <div class="error-content">
+    <h3 class="error-title">{{ title() }}</h3>
+    <p class="error-text">{{ message() }}</p>
+  </div>
+  @if (dismissible()) {
+    <button class="dismiss-btn" (click)="dismiss.emit()">
+      <span class="material-icons">close</span>
+    </button>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/error-message/error-message.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 
 @Component({
   selector: 'app-error-message',
-  imports: [],
   templateUrl: './error-message.html',
-  styleUrl: './error-message.css',
+  styleUrl: './error-message.css'
 })
 export class ErrorMessage {
-
+  type = input<'error' | 'warning' | 'info' | 'success'>('error');
+  title = input<string>('');
+  message = input.required<string>();
+  dismissible = input<boolean>(false);
+  
+  dismiss = output<void>();
+  
+  getIcon(): string {
+    switch (this.type()) {
+      case 'error': return 'error';
+      case 'warning': return 'warning';
+      case 'info': return 'info';
+      case 'success': return 'check_circle';
+      default: return 'error';
+    }
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/header/header.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 1000;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  color: var(--text-primary);
+}
+
+.logo-icon {
+  font-size: 24px;
+}
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary-orange);
+}
+
+.header-center {
+  flex: 1;
+  max-width: 600px;
+  margin: 0 20px;
+}
+
+.search-bar {
+  position: relative;
+  width: 100%;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  font-size: 20px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px 8px 40px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 20px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--primary-orange);
+  background-color: var(--bg-primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.icon-button:hover {
+  background-color: var(--bg-hover);
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.user-menu:hover {
+  background-color: var(--bg-hover);
+}
+
+.login-btn {
+  padding: 6px 16px;
+  background-color: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.login-btn:hover {
+  background-color: var(--primary-orange-light);
+}
+
+@media (max-width: 960px) {
+  .menu-toggle {
+    display: block;
+  }
+  
+  .header-center {
+    display: none;
+  }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/header/header.html
 --------------------------------------------------------------------------------
-<p>header works!</p>
+<header class="header">
+  <div class="header-left">
+    <button class="menu-toggle" (click)="toggleSidebar()">
+      <span class="material-icons">menu</span>
+    </button>
+    <div class="logo" routerLink="/feed">
+      <span class="logo-icon">🔥</span>
+      <span class="logo-text">MemeForum</span>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <div class="search-bar">
+      <span class="material-icons search-icon">search</span>
+      <input 
+        type="text" 
+        placeholder="Search memes..." 
+        class="search-input"
+      />
+    </div>
+  </div>
+
+  <div class="header-right">
+    <button class="icon-button" routerLink="/create-post">
+      <span class="material-icons">add</span>
+    </button>
+    
+    <app-notification-bell></app-notification-bell>
+    
+    @if (isAuthenticated()) {
+      <div class="user-menu" (click)="toggleUserMenu()">
+        <app-user-avatar [size]="32"></app-user-avatar>
+        <span class="material-icons">arrow_drop_down</span>
+      </div>
+    } @else {
+      <button class="login-btn" routerLink="/login">Login</button>
+    }
+  </div>
+</header>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/header/header.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { NotificationBell } from '../../../features/notifications/notification-bell/notification-bell';
+import { UserAvatar } from '../user-avatar/user-avatar';
 
 @Component({
   selector: 'app-header',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule, RouterLink, NotificationBell, UserAvatar],
   templateUrl: './header.html',
-  styleUrl: './header.css',
+  styleUrl: './header.css'
 })
 export class Header {
-
+  isAuthenticated = signal(false);
+  
+  toggleSidebar() {
+    console.log('Toggle sidebar');
+  }
+  
+  toggleUserMenu() {
+    console.log('Toggle user menu');
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/loading-spinner/loading-spinner.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+}
+
+.spinner-container.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(10, 10, 10, 0.9);
+  z-index: 9999;
+}
+
+.spinner {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: var(--primary-orange);
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+  animation-delay: -0.45s;
+}
+
+.spinner-ring:nth-child(2) {
+  animation-delay: -0.3s;
+  border-top-color: var(--primary-orange-light);
+}
+
+.spinner-ring:nth-child(3) {
+  animation-delay: -0.15s;
+  border-top-color: var(--primary-orange-dark);
+}
+
+.spinner-message {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/loading-spinner/loading-spinner.html
 --------------------------------------------------------------------------------
-<p>loading-spinner works!</p>
+<div class="spinner-container" [class.fullscreen]="fullscreen()">
+  <div class="spinner">
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+  </div>
+  @if (message()) {
+    <p class="spinner-message">{{ message() }}</p>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/loading-spinner/loading-spinner.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-loading-spinner',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './loading-spinner.html',
-  styleUrl: './loading-spinner.css',
+  styleUrl: './loading-spinner.css'
 })
 export class LoadingSpinner {
-
+  fullscreen = input<boolean>(false);
+  message = input<string>('');
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/sidebar/sidebar.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 48px;
+  bottom: 0;
+  width: 280px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: transform 0.3s;
+  z-index: 999;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 12px;
+}
+
+.nav-section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding: 0 12px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.2s;
+  margin-bottom: 2px;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-hover);
+  color: var(--primary-orange);
+}
+
+.nav-item.active {
+  background-color: var(--bg-hover);
+  color: var(--primary-orange);
+  border-left: 3px solid var(--primary-orange);
+}
+
+.nav-item .material-icons {
+  font-size: 20px;
+}
+
+.category-emoji {
+  font-size: 20px;
+  width: 20px;
+  text-align: center;
+}
+
+.nav-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.create-post-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s;
+}
+
+.create-post-btn:hover {
+  background-color: var(--primary-orange-light);
+}
+
+@media (max-width: 960px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/sidebar/sidebar.html
 --------------------------------------------------------------------------------
-<p>sidebar works!</p>
+<aside class="sidebar" [class.collapsed]="isCollapsed()">
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <h3 class="section-title">FEEDS</h3>
+      <a routerLink="/feed" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">
+        <span class="material-icons">home</span>
+        <span class="nav-text">Home</span>
+      </a>
+      <a routerLink="/feed/hot" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">whatshot</span>
+        <span class="nav-text">Hot</span>
+      </a>
+      <a routerLink="/feed/new" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">new_releases</span>
+        <span class="nav-text">New</span>
+      </a>
+      <a routerLink="/feed/top" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">trending_up</span>
+        <span class="nav-text">Top</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <h3 class="section-title">CATEGORIES</h3>
+      @for (category of categories(); track category.id) {
+        <a [routerLink]="['/category', category.slug]" routerLinkActive="active" class="nav-item">
+          <span class="category-emoji">{{ category.emoji }}</span>
+          <span class="nav-text">{{ category.name }}</span>
+        </a>
+      }
+    </div>
+
+    @if (isAuthenticated()) {
+      <div class="nav-section">
+        <h3 class="section-title">MY STUFF</h3>
+        <a routerLink="/favorites" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">favorite</span>
+          <span class="nav-text">Favorites</span>
+        </a>
+        <a routerLink="/my-posts" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">article</span>
+          <span class="nav-text">My Posts</span>
+        </a>
+        <a routerLink="/settings" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">settings</span>
+          <span class="nav-text">Settings</span>
+        </a>
+      </div>
+    }
+  </nav>
+
+  <div class="sidebar-footer">
+    <button class="create-post-btn" routerLink="/create-post">
+      <span class="material-icons">add</span>
+      <span>Create Post</span>
+    </button>
+  </div>
+</aside>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/sidebar/sidebar.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink, RouterLinkActive } from '@angular/router';
 
 @Component({
   selector: 'app-sidebar',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule, RouterLink, RouterLinkActive],
   templateUrl: './sidebar.html',
-  styleUrl: './sidebar.css',
+  styleUrl: './sidebar.css'
 })
 export class Sidebar {
-
+  isCollapsed = signal(false);
+  isAuthenticated = signal(false);
+  
+  categories = signal([
+    { id: 1, name: 'Funny', emoji: '😂', slug: 'funny' },
+    { id: 2, name: 'Gaming', emoji: '🎮', slug: 'gaming' },
+    { id: 3, name: 'Programming', emoji: '💻', slug: 'programming' },
+    { id: 4, name: 'Dank', emoji: '🌚', slug: 'dank' },
+    { id: 5, name: 'Wholesome', emoji: '🥰', slug: 'wholesome' },
+  ]);
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/user-avatar/user-avatar.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.avatar.clickable {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.avatar.clickable:hover {
+  transform: scale(1.05);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+  font-size: calc(var(--size) * 0.4);
+  text-transform: uppercase;
+}
+
+.online-indicator {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 25%;
+  height: 25%;
+  background-color: var(--success);
+  border: 2px solid var(--bg-secondary);
+  border-radius: 50%;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/user-avatar/user-avatar.html
 --------------------------------------------------------------------------------
-<p>user-avatar works!</p>
+<div 
+  class="avatar" 
+  [style.width.px]="size()"
+  [style.height.px]="size()"
+  [class.clickable]="clickable()"
+  (click)="handleClick()"
+>
+  @if (imageUrl()) {
+    <img [src]="imageUrl()" [alt]="username() || 'User avatar'" class="avatar-image">
+  } @else {
+    <div class="avatar-fallback" [style.background-color]="getAvatarColor()">
+      {{ getInitials() }}
+    </div>
+  }
+  
+  @if (showOnlineStatus() && isOnline()) {
+    <span class="online-indicator"></span>
+  }
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/user-avatar/user-avatar.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-user-avatar',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './user-avatar.html',
-  styleUrl: './user-avatar.css',
+  styleUrl: './user-avatar.css'
 })
 export class UserAvatar {
-
+  size = input<number>(40);
+  username = input<string>('');
+  imageUrl = input<string>('');
+  showOnlineStatus = input<boolean>(false);
+  isOnline = input<boolean>(false);
+  clickable = input<boolean>(false);
+  
+  click = output<void>();
+  
+  handleClick() {
+    if (this.clickable()) {
+      this.click.emit();
+    }
+  }
+  
+  getInitials(): string {
+    const name = this.username();
+    if (!name) return '?';
+    
+    const parts = name.split(' ');
+    if (parts.length >= 2) {
+      return parts[0][0] + parts[1][0];
+    }
+    return name.substring(0, 2);
+  }
+  
+  getAvatarColor(): string {
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+      '#FFEAA7', '#DDA0DD', '#98D8C8', '#FFB6C1'
+    ];
+    
+    const name = this.username();
+    if (!name) return colors[0];
+    
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
+  }
 }
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/vote-buttons/vote-buttons.css
 --------------------------------------------------------------------------------
-[EMPTY FILE]
+.vote-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.vote-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vote-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.vote-btn .material-icons {
+  font-size: 20px;
+}
+
+.vote-btn.upvote.active {
+  color: var(--upvote);
+}
+
+.vote-btn.downvote.active {
+  color: var(--downvote);
+}
+
+.vote-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 30px;
+  text-align: center;
+}
+
+.vote-count.upvoted {
+  color: var(--upvote);
+}
+
+.vote-count.downvoted {
+  color: var(--downvote);
+}
+
+/* Horizontal layout variant */
+.vote-container.horizontal {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.vote-container.horizontal .vote-btn .material-icons {
+  font-size: 18px;
+}
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/vote-buttons/vote-buttons.html
 --------------------------------------------------------------------------------
-<p>vote-buttons works!</p>
+<div class="vote-container">
+  <button 
+    class="vote-btn upvote" 
+    [class.active]="userVote() === 'up'"
+    (click)="handleVote('up')"
+    [attr.aria-label]="'Upvote'"
+  >
+    <span class="material-icons">arrow_upward</span>
+  </button>
+  
+  <span class="vote-count" [class.upvoted]="userVote() === 'up'" [class.downvoted]="userVote() === 'down'">
+    {{ formatVoteCount(voteCount()) }}
+  </span>
+  
+  <button 
+    class="vote-btn downvote" 
+    [class.active]="userVote() === 'down'"
+    (click)="handleVote('down')"
+    [attr.aria-label]="'Downvote'"
+  >
+    <span class="material-icons">arrow_downward</span>
+  </button>
+</div>
 
 --------------------------------------------------------------------------------
 FILE: src/app/shared/components/vote-buttons/vote-buttons.ts
 --------------------------------------------------------------------------------
-import { Component } from '@angular/core';
+import { Component, input, output, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-vote-buttons',
-  imports: [],
+  standalone: true,
+  imports: [CommonModule],
   templateUrl: './vote-buttons.html',
-  styleUrl: './vote-buttons.css',
+  styleUrl: './vote-buttons.css'
 })
 export class VoteButtons {
+  upvotes = input.required<number>();
+  downvotes = input.required<number>();
+  userVote = input<'up' | 'down' | null>(null);
+  orientation = input<'vertical' | 'horizontal'>('vertical');
+  
+  vote = output<'up' | 'down'>();
+  
+  voteCount = computed(() => {
+    return this.upvotes() - this.downvotes();
+  });
+  
+  handleVote(voteType: 'up' | 'down') {
+    this.vote.emit(voteType);
+  }
+  
+  formatVoteCount(count: number): string {
+    if (count >= 1000000) {
+      return (count / 1000000).toFixed(1) + 'M';
+    } else if (count >= 1000) {
+      return (count / 1000).toFixed(1) + 'k';
+    }
+    return count.toString();
+  }
+}
 
+--------------------------------------------------------------------------------
+FILE: src/custom-theme.scss
+--------------------------------------------------------------------------------
+
+// Include theming for Angular Material with `mat.theme()`.
+// This Sass mixin will define CSS variables that are used for styling Angular Material
+// components according to the Material 3 design spec.
+// Learn more about theming and how to use it for your application's
+// custom components at https://material.angular.dev/guide/theming
+@use '@angular/material' as mat;
+
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
+}
+
+body {
+  // Default the application to a light color theme. This can be changed to
+  // `dark` to enable the dark color theme, or to `light dark` to defer to the
+  // user's system settings.
+  color-scheme: light;
+
+  // Set a default background, font and text colors for the application using
+  // Angular Material's system-level CSS variables. Learn more about these
+  // variables at https://material.angular.dev/guide/system-variables
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  // Reset the user agent margin.
+  margin: 0;
 }
 
 --------------------------------------------------------------------------------
@@ -1576,10 +5096,13 @@ FILE: src/index.html
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Frontend</title>
+  <title>MemeForum</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
   <app-root></app-root>
@@ -1589,6 +5112,7 @@ FILE: src/index.html
 --------------------------------------------------------------------------------
 FILE: src/main.ts
 --------------------------------------------------------------------------------
+import 'zone.js';  // This MUST be the first import
 import { bootstrapApplication } from '@angular/platform-browser';
 import { appConfig } from './app/app.config';
 import { App } from './app/app';
@@ -1599,7 +5123,85 @@ bootstrapApplication(App, appConfig)
 --------------------------------------------------------------------------------
 FILE: src/styles.css
 --------------------------------------------------------------------------------
-/* You can add global styles to this file, and also import other style files */
+/* Import Material Icons and Monospace Font */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+/* CSS Variables for Dark Theme */
+:root {
+  /* Primary Colors */
+  --primary-orange: #ff4500;
+  --primary-orange-light: #ff6b4a;
+  --primary-orange-dark: #cc3700;
+  
+  /* Background Colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1b;
+  --bg-tertiary: #272729;
+  --bg-hover: #343536;
+  
+  /* Text Colors */
+  --text-primary: #d7dadc;
+  --text-secondary: #818384;
+  --text-muted: #565758;
+  
+  /* Border Colors */
+  --border-primary: #343536;
+  --border-secondary: #474748;
+   /* Additional needed variables */
+  --primary-orange-light: #ff6b4a;
+  --primary-orange-dark: #cc3700;
+  /* Status Colors */
+  --upvote: #ff4500;
+  --downvote: #7193ff;
+  --success: #46d160;
+  --error: #ea0027;
+  --warning: #ffd635;
+}
+
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'JetBrains Mono', monospace;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Material Overrides */
+.mat-mdc-button.mat-primary {
+  --mdc-filled-button-container-color: var(--primary-orange);
+}
+
+.mat-mdc-raised-button.mat-primary {
+  --mdc-protected-button-container-color: var(--primary-orange);
+}
 
 --------------------------------------------------------------------------------
 FILE: tsconfig.app.json
@@ -1680,7 +5282,7 @@ FILE: tsconfig.spec.json
 ================================================================================
 SUMMARY
 ================================================================================
-Total files included: 104
+Total files included: 105
 
 File types:
   .ts: 45
@@ -1688,3 +5290,4 @@ File types:
   .html: 26
   .json: 5
   .md: 2
+  .scss: 1

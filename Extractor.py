@@ -1,10 +1,11 @@
 import os
 
 # Set your target directory here
-MAIN_PATH = r"backend"
+MAIN_PATH = r"frontend"
 
 # Folders to completely ignore
 IGNORE_FOLDERS = {
+    ".venv",
     ".git",
     ".vscode", 
     "node_modules",      # Massive folder, not needed
@@ -39,6 +40,8 @@ IGNORE_EXTENSIONS = {
 
 # Extensions to INCLUDE (whitelist approach for clarity)
 INCLUDE_EXTENSIONS = {
+     # Python
+    ".py",               # Python source files
     # TypeScript/JavaScript
     ".ts",               # TypeScript source
     ".js",               # JavaScript (only if needed, e.g., config files)

@@ -2,7 +2,7 @@
   <nav class="sidebar-nav">
     <div class="nav-section">
       <h3 class="section-title">FEEDS</h3>
-      <a routerLink="/feed" routerLinkActive="active" class="nav-item">
+      <a routerLink="/feed" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">
         <span class="material-icons">home</span>
         <span class="nav-text">Home</span>
       </a>
