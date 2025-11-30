@@ -3234,9 +3234,10 @@ Usage:
 Or with uvicorn directly:
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
-
 import uvicorn
+from fastapi import FastAPI
 from app.config import settings
+app = FastAPI()
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -3328,8 +3329,10 @@ if __name__ == "__main__":
 
 ================================================================================
 SUMMARY
-================================================================================
-Total files included: 41
+Total files: 44
+Original size: 116,170 chars
+Processed size: 109,949 chars
+Reduction: 5.4%
 
 File types:
   .py: 37

@@ -7,7 +7,9 @@ Usage:
 Or with uvicorn directly:
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
+from fastapi import FastAPI
 
+app = FastAPI()
 import uvicorn
 from app.config import settings
 

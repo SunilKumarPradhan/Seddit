@@ -16,3 +16,14 @@ uv run alembic revision --autogenerate -m "initial schema"
 uv run alembic upgrade head 
 
  uv run python seed.py
+
+
+ to run : uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+
+
+npm run build -- --configuration=production
+
+
+docker-compose exec backend bash
+python seed.py
