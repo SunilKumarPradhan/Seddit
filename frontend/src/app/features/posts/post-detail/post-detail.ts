@@ -108,23 +108,23 @@ export class PostDetail implements OnInit {
   }
 
   handlePostVote(vote: 'up' | 'down') {
-    const currentPost = this.post();
-    if (!currentPost) return;
+  const currentPost = this.post();
+  if (!currentPost) return;
 
-    const currentVote = currentPost.userVote;
+  const currentVote = currentPost.userVote;
 
-    if (currentVote === vote) {
-      this.postService.removeVote(currentPost.id).subscribe({
-        next: () => this.loadPost(currentPost.id),
-        error: (err) => console.error('Failed to remove vote', err),
-      });
-    } else {
-      this.postService.vote(currentPost.id, vote).subscribe({
-        next: () => this.loadPost(currentPost.id),
-        error: (err) => console.error('Failed to vote', err),
-      });
-    }
+  if (currentVote === vote) {
+    this.postService.removeVote(currentPost.id, currentVote).subscribe({
+      next: () => this.loadPost(currentPost.id),
+      error: (err) => console.error('Failed to remove vote', err),
+    });
+  } else {
+    this.postService.vote(currentPost.id, vote, currentVote).subscribe({
+      next: () => this.loadPost(currentPost.id),
+      error: (err) => console.error('Failed to vote', err),
+    });
   }
+}
 
   toggleFavorite() {
     const currentPost = this.post();

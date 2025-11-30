@@ -441,15 +441,13 @@ export interface Comment {
 }
 FILE: src/app/core/models/notification.model.ts
 export interface Notification {
-}
-export interface Notification {
   id: number;
-  userId: number;
+  user_id: number;
   type: string;
   message: string;
-  link?: string | null;
-  isRead: boolean;
-  createdAt: string;
+  link?: string;
+  is_read: boolean;
+  created_at: string;
 }
 FILE: src/app/core/models/post.model.ts
 export interface Post {
@@ -5443,8 +5441,8 @@ FILE: tsconfig.spec.json
 }
 SUMMARY
 Total files: 109
-Original size: 146,868 chars
-Processed size: 143,632 chars
+Original size: 146,840 chars
+Processed size: 143,594 chars
 Reduction: 2.2%
 
 File types:

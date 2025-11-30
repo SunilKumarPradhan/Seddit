@@ -2,7 +2,7 @@ import os
 import re
 
 # Set your target directory here
-MAIN_PATH = r"backend"
+MAIN_PATH = r"C:\Users\SunilKumarPradhan\Desktop\Seddit"
 
 # Folders to completely ignore
 IGNORE_FOLDERS = {

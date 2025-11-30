@@ -1,9 +1,10 @@
 <article class="post-card" (click)="navigateToPost()">
   <div class="post-votes">
     <app-vote-buttons
-      [upvotes]="post().upvotes"
-      [downvotes]="post().downvotes"
-      [userVote]="post().userVote"
+      [upvotes]="currentUpvotes()"
+      [downvotes]="currentDownvotes()"
+      [userVote]="currentUserVote()"
+      [disabled]="isVotePending()"
       (vote)="handleVote($event)"
     ></app-vote-buttons>
   </div>

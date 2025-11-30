@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, signal, effect } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
@@ -6,6 +6,7 @@ import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
 import { Post } from '../../../core/models/post.model';
 import { PostService } from '../services/post';
 import { FavoriteState } from '../../../core/services/favorite';
+import { VoteState } from '../../../core/services/vote-state';
 
 @Component({
   selector: 'app-post-card',
@@ -19,13 +20,32 @@ export class PostCard {
   private readonly router = inject(Router);
   private readonly postService = inject(PostService);
   private readonly favoriteState = inject(FavoriteState);
+  private readonly voteState = inject(VoteState);
 
   post = input.required<Post>();
   isFavorite = signal(false);
 
+  readonly currentUpvotes = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.upvotes ?? this.post().upvotes;
+  });
+
+  readonly currentDownvotes = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.downvotes ?? this.post().downvotes;
+  });
+
+  readonly currentUserVote = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.userVote ?? this.post().userVote;
+  });
+
+  readonly isVotePending = computed(() => {
+    return this.voteState.isPending('post', this.post().id);
+  });
+
   constructor() {
     effect(() => {
-      // Sync with post's favorited state
       this.isFavorite.set(this.post().isFavorited);
     }, { allowSignalWrites: true });
   }
@@ -35,39 +55,27 @@ export class PostCard {
   }
 
   handleVote(vote: 'up' | 'down') {
-    const currentPost = this.post();
-    const currentVote = currentPost.userVote;
+    if (this.isVotePending()) return; // Prevent double-clicking
 
+    const currentVote = this.currentUserVote();
+    
     if (currentVote === vote) {
-      this.postService.removeVote(currentPost.id).subscribe({
-        next: () => {
-          if (vote === 'up') {
-            currentPost.upvotes--;
-          } else {
-            currentPost.downvotes--;
-          }
-          currentPost.userVote = null;
+      // Remove vote
+      this.postService.removeVote(this.post().id, currentVote).subscribe({
+        error: (err) => {
+          console.error('Failed to remove vote', err);
+          // Revert optimistic update
+          this.voteState.optimisticVote('post', this.post().id, currentVote, null);
         },
-        error: (err) => console.error('Failed to remove vote', err),
       });
     } else {
-      this.postService.vote(currentPost.id, vote).subscribe({
-        next: () => {
-          if (currentVote === 'up') {
-            currentPost.upvotes--;
-          } else if (currentVote === 'down') {
-            currentPost.downvotes--;
-          }
-
-          if (vote === 'up') {
-            currentPost.upvotes++;
-          } else {
-            currentPost.downvotes++;
-          }
-
-          currentPost.userVote = vote;
+      // Add or change vote
+      this.postService.vote(this.post().id, vote, currentVote).subscribe({
+        error: (err) => {
+          console.error('Failed to vote', err);
+          // Revert optimistic update
+          this.voteState.optimisticVote('post', this.post().id, currentVote, vote);
         },
-        error: (err) => console.error('Failed to vote', err),
       });
     }
   }

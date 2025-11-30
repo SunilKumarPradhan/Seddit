@@ -1,20 +1,27 @@
 <div class="vote-container" [class.horizontal]="orientation() === 'horizontal'">
-  <button 
-    class="vote-btn upvote" 
+  <button
+    class="vote-btn upvote"
     [class.active]="userVote() === 'up'"
+    [class.disabled]="disabled()"
+    [disabled]="disabled()"
     (click)="handleVote($event, 'up')"
     [attr.aria-label]="'Upvote'"
   >
     <span class="material-icons">arrow_upward</span>
   </button>
-  
-  <span class="vote-count" [class.upvoted]="userVote() === 'up'" [class.downvoted]="userVote() === 'down'">
+
+  <span class="vote-count" 
+    [class.upvoted]="userVote() === 'up'" 
+    [class.downvoted]="userVote() === 'down'"
+    [class.loading]="disabled()">
     {{ formatVoteCount(voteCount()) }}
   </span>
-  
-  <button 
-    class="vote-btn downvote" 
+
+  <button
+    class="vote-btn downvote"
     [class.active]="userVote() === 'down'"
+    [class.disabled]="disabled()"
+    [disabled]="disabled()"
     (click)="handleVote($event, 'down')"
     [attr.aria-label]="'Downvote'"
   >

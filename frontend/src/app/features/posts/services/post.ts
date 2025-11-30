@@ -1,8 +1,10 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../core/config/environment';
-import { map } from 'rxjs';
+import { map, tap } from 'rxjs';
 import { Post, PostList } from '../../../core/models/post.model';
+import { VoteState } from '../../../core/services/vote-state';
+import { Websocket } from '../../../core/services/websocket';
 
 interface PostDto {
   id: number;
@@ -40,6 +42,8 @@ interface CreatePostDto {
 @Injectable({ providedIn: 'root' })
 export class PostService {
   private readonly http = inject(HttpClient);
+  private readonly voteState = inject(VoteState);
+  private readonly websocket = inject(Websocket);
 
   list(options: { page?: number; sortBy?: 'new' | 'hot' | 'top'; tag?: string | null } = {}) {
     const params = new HttpParams({
@@ -79,14 +83,40 @@ export class PostService {
     return this.http.delete(`${environment.apiUrl}/posts/${postId}`);
   }
 
-  vote(postId: number, voteType: 'up' | 'down') {
-    return this.http.post(`${environment.apiUrl}/posts/${postId}/vote`, {
+  vote(postId: number, voteType: 'up' | 'down', currentVote: 'up' | 'down' | null) {
+    // Optimistic update
+    this.voteState.optimisticVote('post', postId, voteType, currentVote);
+    this.voteState.setPending('post', postId, true);
+
+    return this.http.post<{
+      upvotes: number;
+      downvotes: number;
+      user_vote: 'up' | 'down' | null;
+    }>(`${environment.apiUrl}/posts/${postId}/vote`, {
       vote_type: voteType,
-    });
+    }).pipe(
+      tap(response => {
+        // Server response will trigger WebSocket update
+        // but we can also update immediately from response
+        this.voteState.setPending('post', postId, false);
+      })
+    );
   }
 
-  removeVote(postId: number) {
-    return this.http.delete(`${environment.apiUrl}/posts/${postId}/vote`);
+  removeVote(postId: number, currentVote: 'up' | 'down' | null) {
+    // Optimistic update
+    this.voteState.optimisticVote('post', postId, null, currentVote);
+    this.voteState.setPending('post', postId, true);
+
+    return this.http.delete<{
+      upvotes: number;
+      downvotes: number;
+      user_vote: null;
+    }>(`${environment.apiUrl}/posts/${postId}/vote`).pipe(
+      tap(response => {
+        this.voteState.setPending('post', postId, false);
+      })
+    );
   }
 
   // ✅ VERIFIED: Correct endpoints for favorite/unfavorite
