@@ -23,3 +23,7 @@ uv run alembic upgrade head
 
 
 npm run build -- --configuration=production
+
+
+docker-compose exec backend bash
+python seed.py

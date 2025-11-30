@@ -2,17 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install build dependencies for psycopg2 et al.
+# System deps (for psycopg2 etc.)
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
-# Copy Python requirements explicitly (create if missing!)
+# Install requirements
 COPY requirements.txt ./
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy app code
+# Copy all project files
 COPY . .
 
-# Expose FastAPI port
+# Expose port
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+# ---- THIS IS THE IMPORTANT LINE ----
+CMD ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
