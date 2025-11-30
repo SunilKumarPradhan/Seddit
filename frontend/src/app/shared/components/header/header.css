@@ -105,18 +105,12 @@
   background-color: var(--bg-hover);
 }
 
+/* ✅ UPDATED: Removed cursor pointer and hover effect */
 .user-menu {
   display: flex;
   align-items: center;
   gap: 4px;
-  cursor: pointer;
   padding: 4px 8px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.user-menu:hover {
-  background-color: var(--bg-hover);
 }
 
 .login-btn {
@@ -139,7 +133,6 @@
   .menu-toggle {
     display: block;
   }
-  
   .header-center {
     display: none;
   }

@@ -1,9 +1,16 @@
-<div class="app-container">
-  <app-header></app-header>
-  <div class="app-body">
-    <app-sidebar></app-sidebar>
-    <main class="main-content">
-      <router-outlet></router-outlet>
-    </main>
+@if (!auth.isReady()) {
+  <app-loading-spinner
+    [fullscreen]="true"
+    message="Loading application..."
+  ></app-loading-spinner>
+} @else {
+  <div class="app-container">
+    <app-header></app-header>
+    <div class="app-body">
+      <app-sidebar></app-sidebar>
+      <main class="main-content">
+        <router-outlet></router-outlet>
+      </main>
+    </div>
   </div>
-</div>
+}

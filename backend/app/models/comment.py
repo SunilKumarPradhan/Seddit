@@ -31,7 +31,8 @@ class Comment(Base):
         "Comment",
         backref="parent",
         remote_side=[id],
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        single_parent=True,        # <-- add this line
     )
     
     votes = relationship("Vote", back_populates="comment", cascade="all, delete-orphan")

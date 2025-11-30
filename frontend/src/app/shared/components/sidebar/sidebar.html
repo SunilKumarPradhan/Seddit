@@ -18,6 +18,14 @@
         <span class="material-icons">trending_up</span>
         <span class="nav-text">Top</span>
       </a>
+      
+      <!-- ✅ ADD THIS: Saved Posts link -->
+      @if (isAuthenticated()) {
+        <a routerLink="/saved" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">bookmark</span>
+          <span class="nav-text">Saved</span>
+        </a>
+      }
     </div>
 
     <div class="nav-section">
@@ -29,24 +37,6 @@
         </a>
       }
     </div>
-
-    @if (isAuthenticated()) {
-      <div class="nav-section">
-        <h3 class="section-title">MY STUFF</h3>
-        <a routerLink="/favorites" routerLinkActive="active" class="nav-item">
-          <span class="material-icons">favorite</span>
-          <span class="nav-text">Favorites</span>
-        </a>
-        <a routerLink="/my-posts" routerLinkActive="active" class="nav-item">
-          <span class="material-icons">article</span>
-          <span class="nav-text">My Posts</span>
-        </a>
-        <a routerLink="/settings" routerLinkActive="active" class="nav-item">
-          <span class="material-icons">settings</span>
-          <span class="nav-text">Settings</span>
-        </a>
-      </div>
-    }
   </nav>
 
   <div class="sidebar-footer">

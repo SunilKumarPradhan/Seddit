@@ -20,7 +20,10 @@ export class VoteButtons {
     return this.upvotes() - this.downvotes();
   });
   
-  handleVote(voteType: 'up' | 'down') {
+  // ✅ MODIFIED: Accept event and stop propagation
+  handleVote(event: Event, voteType: 'up' | 'down') {
+    event.stopPropagation();
+    event.preventDefault();
     this.vote.emit(voteType);
   }
   

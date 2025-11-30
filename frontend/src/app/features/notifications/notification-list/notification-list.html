@@ -1,1 +1,18 @@
-<p>notification-list works!</p>
+<section>
+  <header>
+    <h2>Notifications</h2>
+    <p>{{ unreadCount() }} unread</p>
+  </header>
+
+  <div>
+    @if (notifications().length === 0) {
+      <p>No notifications yet.</p>
+    } @else {
+      @for (notification of notifications(); track notification.id) {
+        <app-notification-item
+          [notification]="notification"
+        ></app-notification-item>
+      }
+    }
+  </div>
+</section>

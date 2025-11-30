@@ -1,84 +1,82 @@
-import { Component, signal } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { Auth } from '../../../core/services/auth';
 
 @Component({
   selector: 'app-login',
+  standalone: true,
   imports: [ReactiveFormsModule, RouterLink],
   templateUrl: './login.html',
-  styleUrl: './login.css'
+  styleUrls: ['./login.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Login {
-  loginForm: FormGroup;
-  showPassword = signal(false);
-  isLoading = signal(false);
-  errorMessage = signal('');
-  
-  constructor(
-    private fb: FormBuilder,
-    private router: Router
-  ) {
-    this.loginForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      password: ['', [Validators.required, Validators.minLength(6)]],
-      rememberMe: [false]
-    });
-  }
-  
+  private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(Auth);
+
+  readonly loginForm: FormGroup = this.fb.group({
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', [Validators.required, Validators.minLength(6)]],
+    rememberMe: [false],
+  });
+
+  readonly showPassword = signal(false);
+  readonly isLoading = signal(false);
+  readonly errorMessage = signal('');
+
   togglePassword() {
-    this.showPassword.update(v => !v);
+    this.showPassword.update((value) => !value);
   }
-  
-  isFieldInvalid(fieldName: string): boolean {
-    const field = this.loginForm.get(fieldName);
-    return !!(field && field.invalid && (field.dirty || field.touched));
+
+  isFieldInvalid(field: string) {
+    const control = this.loginForm.get(field);
+    return !!(control && control.invalid && (control.dirty || control.touched));
   }
-  
+
   async onSubmit() {
     if (this.loginForm.invalid) {
-      Object.keys(this.loginForm.controls).forEach(key => {
-        this.loginForm.get(key)?.markAsTouched();
-      });
+      Object.keys(this.loginForm.controls).forEach((key) => this.loginForm.get(key)?.markAsTouched());
       return;
     }
-    
+
     this.isLoading.set(true);
     this.errorMessage.set('');
-    
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // TODO: Implement actual login logic
-      console.log('Login data:', this.loginForm.value);
-      
-      this.router.navigate(['/feed']);
+      await this.auth.loginWithEmail(
+        this.loginForm.get('email')?.value,
+        this.loginForm.get('password')?.value,
+      );
     } catch (error) {
-      this.errorMessage.set('Invalid email or password');
+      console.error('Login failed', error);
+      this.errorMessage.set('Invalid credentials or Firebase not configured.');
     } finally {
       this.isLoading.set(false);
     }
   }
-  
+
   async loginWithGoogle() {
     this.isLoading.set(true);
+    this.errorMessage.set('');
     try {
-      // TODO: Implement Firebase Google auth
-      console.log('Login with Google');
+      await this.auth.loginWithGoogle();
     } catch (error) {
-      this.errorMessage.set('Google login failed');
+      console.error('Google login failed', error);
+      this.errorMessage.set('Google login failed.');
     } finally {
       this.isLoading.set(false);
     }
   }
-  
+
   async loginWithGithub() {
     this.isLoading.set(true);
+    this.errorMessage.set('');
     try {
-      // TODO: Implement Firebase GitHub auth
-      console.log('Login with GitHub');
+      await this.auth.loginWithGithub();
     } catch (error) {
-      this.errorMessage.set('GitHub login failed');
+      console.error('GitHub login failed', error);
+      this.errorMessage.set('GitHub login failed.');
     } finally {
       this.isLoading.set(false);
     }

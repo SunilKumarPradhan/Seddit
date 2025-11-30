@@ -1,8 +1,8 @@
-<div class="vote-container">
+<div class="vote-container" [class.horizontal]="orientation() === 'horizontal'">
   <button 
     class="vote-btn upvote" 
     [class.active]="userVote() === 'up'"
-    (click)="handleVote('up')"
+    (click)="handleVote($event, 'up')"
     [attr.aria-label]="'Upvote'"
   >
     <span class="material-icons">arrow_upward</span>
@@ -15,7 +15,7 @@
   <button 
     class="vote-btn downvote" 
     [class.active]="userVote() === 'down'"
-    (click)="handleVote('down')"
+    (click)="handleVote($event, 'down')"
     [attr.aria-label]="'Downvote'"
   >
     <span class="material-icons">arrow_downward</span>

@@ -1,112 +1,72 @@
-import { Component, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { NgIf } from '@angular/common';
+import { Comment } from '../../../core/models/comment.model';
 import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
 import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
 import { CommentForm } from '../comment-form/comment-form';
 
 @Component({
   selector: 'app-comment-item',
-  imports: [RouterLink, NgIf, UserAvatar, VoteButtons, CommentForm],
+  standalone: true,
+  imports: [RouterLink, UserAvatar, VoteButtons, CommentForm],
   templateUrl: './comment-item.html',
-  styleUrl: './comment-item.css'
+  styleUrls: ['./comment-item.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CommentItem {
-  // Inputs
-  comment = input.required<any>();
+  comment = input.required<Comment>();
   depth = input<number>(0);
-  
-  // Outputs
-  reply = output<{commentId: string, content: string}>();
-  vote = output<{commentId: string, voteType: 'up' | 'down'}>();
-  delete = output<string>();
-  
-  // Local state
-  showReplyForm = signal(false);
-  
-  // Toggle reply form visibility
+
+  readonly reply = output<{ commentId: number; content: string }>();
+  readonly vote = output<{ commentId: number; voteType: 'up' | 'down' }>();
+  readonly delete = output<number>();
+
+  readonly showReplyForm = signal(false);
+
   toggleReply() {
-    this.showReplyForm.update(v => !v);
+    this.showReplyForm.update((value) => !value);
   }
-  
-  // Submit a reply to this comment
+
   submitReply(content: string) {
-    this.reply.emit({
-      commentId: this.comment().id,
-      content
-    });
+    this.reply.emit({ commentId: this.comment().id, content });
     this.showReplyForm.set(false);
   }
-  
-  // Handle vote button click for this comment
+
   onVoteClick(voteType: 'up' | 'down') {
-    this.vote.emit({
-      commentId: this.comment().id,
-      voteType
-    });
+    this.vote.emit({ commentId: this.comment().id, voteType });
   }
-  
-  // Handle nested reply event from child comments
-  onNestedReply(event: {commentId: string, content: string}) {
-    // Pass the event up to parent
+
+  onNestedReply(event: { commentId: number; content: string }) {
     this.reply.emit(event);
   }
-  
-  // Handle nested vote event from child comments
-  onNestedVote(event: {commentId: string, voteType: 'up' | 'down'}) {
-    // Pass the event up to parent
+
+  onNestedVote(event: { commentId: number; voteType: 'up' | 'down' }) {
     this.vote.emit(event);
   }
-  
-  // Handle nested delete event from child comments
-  onNestedDelete(commentId: string) {
-    // Pass the event up to parent
+
+  onNestedDelete(commentId: number) {
     this.delete.emit(commentId);
   }
-  
-  // Delete this comment
+
   deleteComment() {
     this.delete.emit(this.comment().id);
   }
-  
-  // Report this comment
-  reportComment() {
-    console.log('Report comment:', this.comment().id);
-    // TODO: Implement report functionality
-  }
-  
-  // Check if current user can moderate
+
   canModerate(): boolean {
-    // TODO: Check if user has permission to delete
-    // This should check against the auth service
     return false;
   }
-  
-  // Format timestamp
-  formatTime(date: Date): string {
-    const now = new Date();
-    const commentDate = new Date(date);
-    const diff = now.getTime() - commentDate.getTime();
-    
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    const months = Math.floor(days / 30);
-    const years = Math.floor(days / 365);
-    
-    if (years > 0) {
-      return `${years} year${years > 1 ? 's' : ''} ago`;
-    } else if (months > 0) {
-      return `${months} month${months > 1 ? 's' : ''} ago`;
-    } else if (days > 0) {
-      return `${days} day${days > 1 ? 's' : ''} ago`;
-    } else if (hours > 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    } else if (minutes > 0) {
-      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-    } else {
-      return 'Just now';
-    }
+
+  reportComment() {
+    console.log('Report comment', this.comment().id);
+  }
+
+  formatTime(isoDate: string): string {
+    const date = new Date(isoDate);
+    const diffSeconds = (Date.now() - date.getTime()) / 1000;
+
+    if (diffSeconds < 60) return 'Just now';
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+    return `${Math.floor(diffSeconds / 86400)}d ago`;
   }
 }

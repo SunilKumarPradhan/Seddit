@@ -11,7 +11,7 @@ class Post(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     title = Column(String(300), nullable=False)
-    image_url = Column(String(500), nullable=True)
+    image_url = Column(Text, nullable=True)
     tag = Column(String(50), nullable=True, index=True)
     description = Column(Text, nullable=True)
     

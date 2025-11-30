@@ -1,218 +1,219 @@
 import os
+import re
 
 # Set your target directory here
-MAIN_PATH = r"frontend"
+MAIN_PATH = r"backend"
 
 # Folders to completely ignore
 IGNORE_FOLDERS = {
-    ".venv",
-    ".git",
-    ".vscode", 
-    "node_modules",      # Massive folder, not needed
-    "dist",              # Build output
-    "build",             # Build output
-    ".angular",          # Angular cache
-    "coverage",          # Test coverage reports
-    ".idea",             # JetBrains IDE
-    ".vs",               # Visual Studio
-    "__pycache__",       # Python cache
-    ".pytest_cache",     # Pytest cache
+    ".venv", ".git", ".vscode", "node_modules", "dist", "build",
+    ".angular", "coverage", ".idea", ".vs", "__pycache__", ".pytest_cache"
 }
 
 # Files to ignore by exact name
 IGNORE_FILES = {
-    "curr_dir.txt",      # Our output file
-    "package-lock.json", # Huge file, package.json is enough
-    ".DS_Store",         # Mac OS
-    "thumbs.db",         # Windows
-    ".editorconfig",     # Editor config
-    ".gitignore",        # Git config
+    "curr_dir.txt", "package-lock.json", ".DS_Store", "thumbs.db",
+    ".editorconfig","package.json","angular.json", ".gitignore" ,"Dockerfile"
 }
 
 # Extensions to ignore
 IGNORE_EXTENSIONS = {
-    ".map",              # Source maps
-    ".log",              # Log files
-    ".lock",             # Lock files
-    ".jpg", ".jpeg", ".png", ".gif", ".ico", ".svg",  # Images (optional)
-    ".woff", ".woff2", ".ttf", ".eot",  # Fonts (optional)
+    ".map", ".log", ".lock", ".jpg", ".jpeg", ".png", ".gif", ".ico",
+    ".svg", ".woff", ".woff2", ".ttf", ".eot" ,".md",".txt"
 }
 
-# Extensions to INCLUDE (whitelist approach for clarity)
+# Extensions to INCLUDE (whitelist)
 INCLUDE_EXTENSIONS = {
-     # Python
-    ".py",               # Python source files
-    # TypeScript/JavaScript
-    ".ts",               # TypeScript source
-    ".js",               # JavaScript (only if needed, e.g., config files)
-    
-    # Templates & Styles
-    ".html",             # Angular templates
-    ".css",              # Styles
-    ".scss",             # SASS styles
-    
-    # Configuration
-    ".json",             # Config files
-    ".md",               # Documentation
+    ".py", ".ts", ".js", ".html", ".css", ".scss", ".json", ".md"
 }
+
+
+def remove_comments(content, file_ext):
+    """
+    Remove comments from code based on file extension.
+    Also removes excessive blank lines.
+    """
+    if file_ext in {".py"}:
+        # Remove Python comments (# ...) but preserve shebang
+        lines = content.split('\n')
+        result = []
+        for i, line in enumerate(lines):
+            # Keep shebang on first line
+            if i == 0 and line.startswith('#!'):
+                result.append(line)
+                continue
+            # Remove inline comments but keep strings with #
+            stripped = line.lstrip()
+            if stripped.startswith('#'):
+                continue  # Skip full-line comments
+            # Remove inline comments (basic approach, may have edge cases)
+            if '#' in line:
+                # Simple heuristic: if # appears after code, remove it
+                # This is not perfect but catches most cases
+                parts = line.split('#', 1)
+                if parts[0].strip():  # There's code before #
+                    result.append(parts[0].rstrip())
+                    continue
+            result.append(line)
+        content = '\n'.join(result)
+    
+    elif file_ext in {".js", ".ts", ".css", ".scss"}:
+        # Remove multi-line comments /* ... */
+        content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+        # Remove single-line comments // ...
+        lines = content.split('\n')
+        result = []
+        for line in lines:
+            # Remove // comments but be careful with URLs
+            if '//' in line:
+                # Simple check: if // is not in a string context
+                # This is basic and may need refinement
+                if 'http://' not in line and 'https://' not in line:
+                    line = re.sub(r'//.*$', '', line)
+            if line.strip():  # Keep non-empty lines
+                result.append(line)
+        content = '\n'.join(result)
+    
+    elif file_ext == ".html":
+        # Remove HTML comments <!-- ... -->
+        content = re.sub(r'<!--[\s\S]*?-->', '', content)
+    
+    elif file_ext == ".json":
+        # JSON doesn't officially support comments, but some files might have them
+        # Remove // style comments (common in JSON-like configs)
+        lines = content.split('\n')
+        result = [line for line in lines if not line.strip().startswith('//')]
+        content = '\n'.join(result)
+    
+    # Remove excessive blank lines (more than 2 consecutive)
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    
+    # Remove trailing whitespace from lines
+    lines = content.split('\n')
+    lines = [line.rstrip() for line in lines]
+    content = '\n'.join(lines)
+    
+    return content.strip()
+
 
 def should_include_file(file_name, file_path):
-    """
-    Determine if a file should be included based on:
-    1. Exact name ignore list
-    2. Extension ignore list
-    3. Extension include list (whitelist)
-    """
-    
-    # Check exact filename ignores
+    """Determine if a file should be included"""
     if file_name in IGNORE_FILES:
         return False
     
-    # Get extension
     _, ext = os.path.splitext(file_name)
     ext_lower = ext.lower()
     
-    # Check extension ignores
     if ext_lower in IGNORE_EXTENSIONS:
         return False
     
-    # Whitelist: only include specific extensions
     if ext_lower in INCLUDE_EXTENSIONS:
         return True
     
-    # For files without extension or unlisted extensions
-    # Include if they're important config files
     important_files = {
-        "Dockerfile", 
-        "docker-compose.yml",
-        ".env.example",
-        "README"
+        "Dockerfile", "docker-compose.yml", ".env.example", "README"
     }
-    
-    if file_name in important_files:
-        return True
-    
-    return False
+    return file_name in important_files
 
 
 def get_relative_path(file_path, root_dir):
     """Get clean relative path with forward slashes"""
     rel_path = os.path.relpath(file_path, root_dir)
-    # Convert to forward slashes for consistency
     return rel_path.replace(os.sep, '/')
 
 
 def write_directory_contents(root_dir):
-    """
-    Create a comprehensive text file with:
-    1. Directory tree structure
-    2. File contents
-    """
-    
+    """Create a comprehensive text file with directory tree and file contents"""
     if not os.path.exists(root_dir):
         print(f"❌ Directory not found: {root_dir}")
         return
     
     output_file = os.path.join(root_dir, "curr_dir.txt")
     
-    # Collect all files first
+    # Collect all files
     all_files = []
-    
     for folder, subdirs, files in os.walk(root_dir):
-        # Remove ignored folders from traversal (in-place modification)
         subdirs[:] = [d for d in subdirs if d not in IGNORE_FOLDERS]
-        
         for file in files:
             if should_include_file(file, os.path.join(folder, file)):
-                file_path = os.path.join(folder, file)
-                all_files.append(file_path)
+                all_files.append(os.path.join(folder, file))
     
-    # Sort files for consistent output
     all_files.sort()
-    
     print(f"📊 Found {len(all_files)} files to include")
     
     with open(output_file, "w", encoding="utf-8") as out:
-        
-        # === PART 1: DIRECTORY TREE ===
-        out.write("=" * 80 + "\n")
-        out.write("DIRECTORY TREE STRUCTURE\n")
-        out.write("=" * 80 + "\n\n")
-        
+        # PART 1: DIRECTORY TREE
+          
+        out.write("DIRECTORY TREE\n")        
         for folder, subdirs, files in os.walk(root_dir):
-            # Remove ignored folders
             subdirs[:] = [d for d in subdirs if d not in IGNORE_FOLDERS]
-            subdirs.sort()  # Sort for consistent output
+            subdirs.sort()
             
-            # Calculate indentation level
             level = folder.replace(root_dir, '').count(os.sep)
-            indent = '│   ' * level
-            
+            indent = '│ ' * level
             folder_name = os.path.basename(folder) or os.path.basename(root_dir)
             out.write(f"{indent}📁 {folder_name}/\n")
             
-            # Sub-indent for files
-            sub_indent = '│   ' * (level + 1)
-            
-            # Filter and sort files
+            sub_indent = '│ ' * (level + 1)
             included_files = [f for f in files if should_include_file(f, os.path.join(folder, f))]
             included_files.sort()
             
             for file in included_files:
-                # Choose icon based on extension
                 icon = "📄"
-                if file.endswith('.ts'):
-                    icon = "📘"
-                elif file.endswith('.html'):
-                    icon = "🌐"
-                elif file.endswith(('.css', '.scss')):
-                    icon = "🎨"
-                elif file.endswith('.json'):
-                    icon = "⚙️"
-                elif file.endswith('.md'):
-                    icon = "📝"
-                
+                if file.endswith('.ts'): icon = "📘"
+                elif file.endswith('.html'): icon = "🌐"
+                elif file.endswith(('.css', '.scss')): icon = "🎨"
+                elif file.endswith('.json'): icon = "⚙️"
+                elif file.endswith('.md'): icon = "📝"
                 out.write(f"{sub_indent}{icon} {file}\n")
         
-        # === PART 2: FILE CONTENTS ===
-        out.write("\n\n")
-        out.write("=" * 80 + "\n")
+        # PART 2: FILE CONTENTS (without comments)
         out.write("FILE CONTENTS\n")
-        out.write("=" * 80 + "\n\n")
+        
+        original_size = 0
+        processed_size = 0
         
         for file_path in all_files:
             rel_path = get_relative_path(file_path, root_dir)
-            
-            out.write("\n" + "-" * 80 + "\n")
             out.write(f"FILE: {rel_path}\n")
-            out.write("-" * 80 + "\n")
             
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
+                    original_size += len(content)
                 
-                # If file is empty, note it
                 if not content.strip():
                     out.write("[EMPTY FILE]\n")
+                    continue
+                
+                # Remove comments based on file extension
+                ext = os.path.splitext(file_path)[1].lower()
+                processed_content = remove_comments(content, ext)
+                processed_size += len(processed_content)
+                
+                if not processed_content.strip():
+                    out.write("[FILE CONTAINS ONLY COMMENTS]\n")
                 else:
-                    out.write(content)
-                    # Ensure newline at end
-                    if not content.endswith('\n'):
+                    out.write(processed_content)
+                    if not processed_content.endswith('\n'):
                         out.write('\n')
                         
             except UnicodeDecodeError:
-                out.write("[BINARY FILE - Cannot display contents]\n")
+                out.write("[BINARY FILE]\n")
             except Exception as e:
-                out.write(f"[ERROR READING FILE: {e}]\n")
+                out.write(f"[ERROR: {e}]\n")
         
-        # === PART 3: SUMMARY ===
-        out.write("\n\n")
-        out.write("=" * 80 + "\n")
+        # PART 3: SUMMARY
         out.write("SUMMARY\n")
-        out.write("=" * 80 + "\n")
-        out.write(f"Total files included: {len(all_files)}\n")
+          
+        out.write(f"Total files: {len(all_files)}\n")
         
-        # Count by extension
+        if original_size > 0:
+            reduction = ((original_size - processed_size) / original_size) * 100
+            out.write(f"Original size: {original_size:,} chars\n")
+            out.write(f"Processed size: {processed_size:,} chars\n")
+            out.write(f"Reduction: {reduction:.1f}%\n")
+        
         ext_counts = {}
         for fp in all_files:
             ext = os.path.splitext(fp)[1] or "[no extension]"
@@ -220,21 +221,23 @@ def write_directory_contents(root_dir):
         
         out.write("\nFile types:\n")
         for ext, count in sorted(ext_counts.items(), key=lambda x: x[1], reverse=True):
-            out.write(f"  {ext}: {count}\n")
+            out.write(f" {ext}: {count}\n")
     
-    print(f"✅ Directory summary saved to: {output_file}")
-    print(f"📁 Total size: {os.path.getsize(output_file) / 1024:.2f} KB")
+    file_size_kb = os.path.getsize(output_file) / 1024
+    print(f"✅ Saved to: {output_file}")
+    print(f"📁 Size: {file_size_kb:.2f} KB")
+    if original_size > 0:
+        print(f"🎯 Comment reduction: {reduction:.1f}%")
 
 
 def main():
     if not MAIN_PATH:
-        print("❌ Please set MAIN_PATH variable to a valid directory path.")
+        print("❌ Please set MAIN_PATH variable")
         return
     
     print(f"🔍 Scanning: {MAIN_PATH}")
-    print(f"📝 Ignoring folders: {', '.join(IGNORE_FOLDERS)}")
-    print(f"✅ Including extensions: {', '.join(INCLUDE_EXTENSIONS)}")
-    print("-" * 80)
+    print(f"📝 Ignoring: {', '.join(list(IGNORE_FOLDERS)[:5])}...")
+    print(f"✅ Including: {', '.join(INCLUDE_EXTENSIONS)}")
     
     write_directory_contents(MAIN_PATH)
 

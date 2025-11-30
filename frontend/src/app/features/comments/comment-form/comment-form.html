@@ -1,6 +1,10 @@
 <div class="comment-form-container">
   <div class="comment-form-header">
-    <app-user-avatar [size]="32"></app-user-avatar>
+    <app-user-avatar 
+      [size]="32"
+      [username]="currentUser()"
+      [imageUrl]="currentUserAvatar()"
+    ></app-user-avatar>
     <span class="comment-as">Comment as <strong>{{ currentUser() }}</strong></span>
   </div>
   
@@ -18,22 +22,9 @@
       
       @if (isFocused() || commentForm.get('content')?.value) {
         <div class="comment-toolbar">
-          <div class="toolbar-buttons">
-            <button type="button" class="toolbar-btn" title="Bold" (click)="formatText('bold')">
-              <span class="material-icons">format_bold</span>
-            </button>
-            <button type="button" class="toolbar-btn" title="Italic" (click)="formatText('italic')">
-              <span class="material-icons">format_italic</span>
-            </button>
-            <button type="button" class="toolbar-btn" title="Code" (click)="formatText('code')">
-              <span class="material-icons">code</span>
-            </button>
-            <button type="button" class="toolbar-btn" title="Link" (click)="formatText('link')">
-              <span class="material-icons">link</span>
-            </button>
-          </div>
+          <!-- ✅ REMOVED: Formatting buttons -->
           
-          <div class="comment-actions">
+          <div class="comment-actions" style="margin-left: auto;">
             @if (isReplying()) {
               <button type="button" class="cancel-btn" (click)="cancel()">
                 Cancel

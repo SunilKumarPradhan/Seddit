@@ -1,0 +1,74 @@
+================================================================================
+DIRECTORY TREE STRUCTURE
+================================================================================
+
+📁 db/
+│   📄 docker-compose.yml
+│   📁 init-scripts/
+
+
+================================================================================
+FILE CONTENTS
+================================================================================
+
+
+--------------------------------------------------------------------------------
+FILE: docker-compose.yml
+--------------------------------------------------------------------------------
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: meme_forum_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: meme_user
+      POSTGRES_PASSWORD: meme_pass
+      POSTGRES_DB: meme_forum
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d  # Run SQL scripts on startup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meme_user -d meme_forum"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - meme_network
+
+  # Optional: PgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: meme_forum_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@memeforum.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - meme_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  meme_network:
+    driver: bridge
+
+
+================================================================================
+SUMMARY
+================================================================================
+Total files included: 1
+
+File types:
+  .yml: 1
