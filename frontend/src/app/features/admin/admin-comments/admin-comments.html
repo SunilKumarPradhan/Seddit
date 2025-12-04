@@ -1,0 +1,101 @@
+<div class="admin-comments">
+  <div class="page-header">
+    <h1>Comment Management</h1>
+    <a routerLink="/admin" class="back-link">
+      <span class="material-icons">arrow_back</span>
+      Back to Dashboard
+    </a>
+  </div>
+
+  <div class="filters-section">
+    <div class="search-box">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        placeholder="Search comments..."
+        (keyup.enter)="applyFilters()"
+      />
+    </div>
+
+    <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="deleted">Deleted</option>
+    </select>
+  </div>
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else {
+    <div class="comments-table-container">
+      <table class="comments-table">
+        <thead>
+          <tr>
+            <th>Content</th>
+            <th>Author</th>
+            <th>Post</th>
+            <th>Status</th>
+            <th>Votes</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (comment of comments(); track comment.id) {
+            <tr [class.deleted]="comment.isDeleted">
+              <td class="content-cell">
+                <span [title]="comment.content">{{ truncateContent(comment.content) }}</span>
+              </td>
+              <td>{{ comment.authorUsername }}</td>
+              <td class="post-cell">
+                <a [routerLink]="['/post', comment.postId]" [title]="comment.postTitle">
+                  {{ truncateContent(comment.postTitle, 30) }}
+                </a>
+              </td>
+              <td>
+                @if (comment.isDeleted) {
+                  <span class="status-badge deleted">Deleted</span>
+                } @else {
+                  <span class="status-badge active">Active</span>
+                }
+              </td>
+              <td>
+                <span class="votes">
+                  <span class="up">↑{{ comment.upvotes }}</span>
+                  <span class="down">↓{{ comment.downvotes }}</span>
+                </span>
+              </td>
+              <td>{{ formatDate(comment.createdAt) }}</td>
+              <td class="actions-cell">
+                @if (!comment.isDeleted) {
+                  <button
+                    class="action-btn delete"
+                    title="Delete"
+                    (click)="deleteComment(comment)"
+                  >
+                    <span class="material-icons">delete</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-message">No comments found</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button (click)="prevPage()" [disabled]="currentPage() === 1">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <span>Page {{ currentPage() }} of {{ Math.ceil(total() / pageSize) || 1 }}</span>
+      <button (click)="nextPage()" [disabled]="currentPage() * pageSize >= total()">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  }
+</div>

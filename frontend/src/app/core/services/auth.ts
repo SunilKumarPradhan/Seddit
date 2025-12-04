@@ -22,6 +22,16 @@ export class Auth {
   private readonly router = inject(Router);
   private readonly storageKey = environment.storageKeys.auth;
 
+  // Lazy inject to avoid circular dependency
+  private _permissionService: PermissionService | null = null;
+  private get permissionService(): PermissionService {
+    if (!this._permissionService) {
+      // Dynamic import to avoid circular dependency
+      this._permissionService = inject(PermissionService);
+    }
+    return this._permissionService;
+  }
+
   private readonly userSignal = signal<User | null>(null);
   private readonly tokenSignal = signal<string | null>(null);
   private readonly readySignal = signal(false);
@@ -71,11 +81,27 @@ export class Auth {
     const auth = getFirebaseAuth();
     if (auth) await signOut(auth);
     this.clearSession();
+    
+    // Clear permissions on logout
+    try {
+      this.permissionService.clearPermissions();
+    } catch (e) {
+      // Ignore if permission service not available
+    }
+    
     await this.router.navigate(['/login']);
   }
 
   handleUnauthorized() {
     this.clearSession();
+    
+    // Clear permissions on unauthorized
+    try {
+      this.permissionService.clearPermissions();
+    } catch (e) {
+      // Ignore if permission service not available
+    }
+    
     this.router.navigate(['/login']);
   }
 
@@ -110,6 +136,10 @@ export class Auth {
       );
       const user = this.mapUser(response.user);
       this.persistSession(response.access_token, user);
+      
+      // Load user permissions after successful login
+      await this.loadUserPermissions();
+      
       await this.router.navigateByUrl(this.redirectUrl ?? '/feed');
       this.redirectUrl = null;
     } catch (error) {
@@ -129,15 +159,30 @@ export class Auth {
     }
   }
 
+  private async loadUserPermissions() {
+    try {
+      await this.permissionService.loadPermissions();
+    } catch (error) {
+      console.warn('Failed to load user permissions', error);
+      // Don't throw - permissions are not critical for basic functionality
+    }
+  }
+
   private mapUser(user: TokenResponse['user']): User {
+    const validRoles = ['admin', 'moderator', 'user'] as const;
+    const role = validRoles.includes(user.role as any) ? (user.role as 'admin' | 'moderator' | 'user') : 'user';
+    
     return {
       id: user.id,
       username: user.username,
       email: user.email,
       avatarUrl: user.avatar_url,
       bio: null,
-      role: user.role ?? 'user',
+      role,
+      isActive: true,
+      isBanned: false,
       createdAt: new Date().toISOString(),
+      updatedAt: null,
     };
   }
 
@@ -154,6 +199,12 @@ export class Auth {
         const parsed = JSON.parse(cache) as { token: string; user: User };
         this.tokenSignal.set(parsed.token);
         this.userSignal.set(parsed.user);
+        
+        // Load permissions after restoring session
+        // Use setTimeout to avoid injection issues during construction
+        setTimeout(() => {
+          this.loadUserPermissions();
+        }, 0);
       } catch (error) {
         console.warn('Failed to restore session', error);
         this.clearSession();
@@ -197,3 +248,6 @@ export class Auth {
     return `${uid}@placeholder.local`;
   }
 }
+
+// Import at the bottom to avoid circular dependency issues
+import { PermissionService } from './permission';

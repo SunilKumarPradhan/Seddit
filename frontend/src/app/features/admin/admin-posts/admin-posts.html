@@ -1,0 +1,206 @@
+<div class="admin-posts">
+  <div class="page-header">
+    <h1>Manage Posts</h1>
+    <p class="subtitle">View and moderate all posts</p>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-section">
+    <div class="search-box">
+      <input
+        type="text"
+        placeholder="Search posts..."
+        [value]="searchQuery()"
+        (input)="searchQuery.set($any($event.target).value)"
+        (keyup.enter)="onSearch()"
+      />
+      <button class="btn-search" (click)="onSearch()">
+        <span>🔍</span>
+      </button>
+    </div>
+
+    <div class="filter-group">
+      <label>Status:</label>
+      <select
+        [value]="statusFilter()"
+        (change)="statusFilter.set($any($event.target).value); onFilterChange()"
+      >
+        <option value="all">All</option>
+        <option value="active">Active</option>
+        <option value="locked">Locked</option>
+        <option value="deleted">Deleted</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Sort:</label>
+      <select
+        [value]="sortBy()"
+        (change)="sortBy.set($any($event.target).value); onFilterChange()"
+      >
+        <option value="created_at">Date Created</option>
+        <option value="upvotes">Upvotes</option>
+        <option value="comment_count">Comments</option>
+        <option value="reports_count">Reports</option>
+      </select>
+      <button
+        class="btn-sort-order"
+        (click)="sortOrder.set(sortOrder() === 'asc' ? 'desc' : 'asc'); onFilterChange()"
+      >
+        {{ sortOrder() === 'asc' ? '↑' : '↓' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Error Message -->
+  @if (error()) {
+    <div class="error-message">
+      {{ error() }}
+      <button (click)="error.set(null)">✕</button>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <p>Loading posts...</p>
+    </div>
+  }
+
+  <!-- Posts Table -->
+  @if (!loading() && posts().length > 0) {
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Status</th>
+            <th>Votes</th>
+            <th>Comments</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (post of posts(); track post.id) {
+            <tr [class]="getStatusClass(post)">
+              <td>{{ post.id }}</td>
+              <td class="title-cell">
+                <a [routerLink]="['/posts', post.id]" target="_blank">
+                  {{ post.title | slice:0:50 }}{{ post.title.length > 50 ? '...' : '' }}
+                </a>
+              </td>
+              <td>
+                <a [routerLink]="['/admin/users']" [queryParams]="{search: post.author_username}">
+                  {{ post.author_username }}
+                </a>
+              </td>
+              <td>
+                <span class="status-badge" [class]="getStatusClass(post)">
+                  {{ getStatusText(post) }}
+                </span>
+              </td>
+              <td>
+                <span class="votes">
+                  <span class="upvotes">+{{ post.upvotes }}</span>
+                  /
+                  <span class="downvotes">-{{ post.downvotes }}</span>
+                </span>
+              </td>
+              <td>{{ post.comment_count }}</td>
+              <td>{{ formatDate(post.created_at) }}</td>
+              <td class="actions-cell">
+                @if (!post.is_deleted) {
+                  @if (post.is_locked) {
+                    <button class="btn-action btn-unlock" (click)="unlockPost(post)" title="Unlock">
+                      🔓
+                    </button>
+                  } @else {
+                    <button class="btn-action btn-lock" (click)="openLockModal(post)" title="Lock">
+                      🔒
+                    </button>
+                  }
+                  <button class="btn-action btn-delete" (click)="deletePost(post)" title="Delete">
+                    🗑️
+                  </button>
+                } @else {
+                  <button class="btn-action btn-restore" (click)="restorePost(post)" title="Restore">
+                    ♻️
+                  </button>
+                }
+                <a class="btn-action btn-view" [routerLink]="['/posts', post.id]" target="_blank" title="View">
+                  👁️
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <button
+        class="btn-page"
+        [disabled]="!hasPrevious()"
+        (click)="previousPage()"
+      >
+        ← Previous
+      </button>
+
+      <span class="page-info">
+        Page {{ currentPage() }} of {{ totalPages() }}
+        <span class="total-count">({{ total() }} posts)</span>
+      </span>
+
+      <button
+        class="btn-page"
+        [disabled]="!hasMore()"
+        (click)="nextPage()"
+      >
+        Next →
+      </button>
+    </div>
+  }
+
+  <!-- Empty State -->
+  @if (!loading() && posts().length === 0) {
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      <h3>No posts found</h3>
+      <p>Try adjusting your search or filters</p>
+    </div>
+  }
+
+  <!-- Lock Modal -->
+  @if (showLockModal()) {
+    <div class="modal-overlay" (click)="closeLockModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Lock Post</h2>
+          <button class="btn-close" (click)="closeLockModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p>You are about to lock: <strong>{{ selectedPost()?.title }}</strong></p>
+          <div class="form-group">
+            <label for="lockReason">Reason (optional):</label>
+            <textarea
+              id="lockReason"
+              [value]="lockReason()"
+              (input)="lockReason.set($any($event.target).value)"
+              placeholder="Enter reason for locking this post..."
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="closeLockModal()">Cancel</button>
+          <button class="btn-confirm" (click)="lockPost()">Lock Post</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

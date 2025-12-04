@@ -21,12 +21,6 @@ def _initialize_firebase() -> None:
 
 
 def verify_firebase_id_token(id_token: str) -> Dict[str, Any]:
-    """
-    Validate a Firebase ID token and return its claims.
-
-    Raises:
-        ValueError: when token is invalid.
-    """
     _initialize_firebase()
     try:
         return firebase_auth.verify_id_token(id_token)

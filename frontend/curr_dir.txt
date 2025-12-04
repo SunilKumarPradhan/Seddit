@@ -1,5 +1,6 @@
 DIRECTORY TREE
 📁 frontend/
+│ 📄 Dockerfile
 │ ⚙️ tsconfig.app.json
 │ ⚙️ tsconfig.json
 │ ⚙️ tsconfig.spec.json
@@ -33,18 +34,39 @@ DIRECTORY TREE
 │ │ │ │ │ 📘 error-interceptor.ts
 │ │ │ │ │ 📘 jwt-interceptor.ts
 │ │ │ │ 📁 models/
+│ │ │ │ │ 📘 admin.model.ts
 │ │ │ │ │ 📘 auth.model.ts
 │ │ │ │ │ 📘 comment.model.ts
 │ │ │ │ │ 📘 notification.model.ts
 │ │ │ │ │ 📘 post.model.ts
 │ │ │ │ │ 📘 user.model.ts
 │ │ │ │ 📁 services/
+│ │ │ │ │ 📘 admin.ts
 │ │ │ │ │ 📘 auth.ts
 │ │ │ │ │ 📘 favorite.ts
 │ │ │ │ │ 📘 notification.ts
+│ │ │ │ │ 📘 permission.ts
 │ │ │ │ │ 📘 theme.ts
+│ │ │ │ │ 📘 vote-state.ts
 │ │ │ │ │ 📘 websocket.ts
 │ │ │ 📁 features/
+│ │ │ │ 📁 admin/
+│ │ │ │ │ 📁 admin-comments/
+│ │ │ │ │ │ 🎨 admin-comments.css
+│ │ │ │ │ │ 🌐 admin-comments.html
+│ │ │ │ │ │ 📘 admin-comments.ts
+│ │ │ │ │ 📁 admin-dashboard/
+│ │ │ │ │ │ 🎨 admin-dashboard.css
+│ │ │ │ │ │ 🌐 admin-dashboard.html
+│ │ │ │ │ │ 📘 admin-dashboard.ts
+│ │ │ │ │ 📁 admin-posts/
+│ │ │ │ │ │ 🎨 admin-posts.css
+│ │ │ │ │ │ 🌐 admin-posts.html
+│ │ │ │ │ │ 📘 admin-posts.ts
+│ │ │ │ │ 📁 admin-users/
+│ │ │ │ │ │ 🎨 admin-users.css
+│ │ │ │ │ │ 🌐 admin-users.html
+│ │ │ │ │ │ 📘 admin-users.ts
 │ │ │ │ 📁 auth/
 │ │ │ │ │ 📁 login/
 │ │ │ │ │ │ 🎨 login.css
@@ -160,6 +182,44 @@ DIRECTORY TREE
 │ │ │ │ │ │ 🌐 vote-buttons.html
 │ │ │ │ │ │ 📘 vote-buttons.ts
 FILE CONTENTS
+FILE: Dockerfile
+# Build stage - Node.js with Alpine for smaller size
+FROM node:20-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files first (for better caching)
+COPY package*.json ./
+
+# Install dependencies with cache mount (Docker BuildKit)
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --only=production=false
+
+# Copy source code
+COPY . .
+
+# Build with production config
+RUN npm run build -- --configuration=production
+
+# Production stage - Nginx Alpine
+FROM nginx:1.25-alpine
+
+# Copy built app
+COPY --from=builder /app/dist/frontend/browser/ /usr/share/nginx/html/
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port
+EXPOSE 80
+
+# Health check (optional but good)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
 FILE: src/app/app.config.ts
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
@@ -346,8 +406,21 @@ export function getFirebaseAuth(): Auth | null {
   return authInstance;
 }
 FILE: src/app/core/guards/admin-guard.ts
-import { CanActivateFn } from '@angular/router';
-export const adminGuard: CanActivateFn = (route, state) => {
+import { CanActivateFn, Router } from '@angular/router';
+import { inject } from '@angular/core';
+import { Auth } from '../services/auth';
+export const adminGuard: CanActivateFn = () => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  if (!auth.isAuthenticated()) {
+    router.navigate(['/login']);
+    return false;
+  }
+  const user = auth.user();
+  if (user?.role !== 'admin') {
+    router.navigate(['/feed']);
+    return false;
+  }
   return true;
 };
 FILE: src/app/core/guards/auth-guard.ts
@@ -376,8 +449,39 @@ export const guestGuard: CanActivateFn = () => {
   return true;
 };
 FILE: src/app/core/guards/role-guard.ts
-import { CanActivateFn } from '@angular/router';
-export const roleGuard: CanActivateFn = (route, state) => {
+import { CanActivateFn, Router, ActivatedRouteSnapshot } from '@angular/router';
+import { inject } from '@angular/core';
+import { Auth } from '../services/auth';
+export const roleGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  if (!auth.isAuthenticated()) {
+    router.navigate(['/login']);
+    return false;
+  }
+  const user = auth.user();
+  const requiredRoles = route.data['roles'] as string[] | undefined;
+  if (!requiredRoles || requiredRoles.length === 0) {
+    return true;
+  }
+  if (!user || !requiredRoles.includes(user.role)) {
+    router.navigate(['/feed']);
+    return false;
+  }
+  return true;
+};
+export const moderatorGuard: CanActivateFn = () => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  if (!auth.isAuthenticated()) {
+    router.navigate(['/login']);
+    return false;
+  }
+  const user = auth.user();
+  if (!user || !['admin', 'moderator'].includes(user.role)) {
+    router.navigate(['/feed']);
+    return false;
+  }
   return true;
 };
 FILE: src/app/core/interceptors/error-interceptor.ts
@@ -408,6 +512,121 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
     }),
   );
 };
+FILE: src/app/core/models/admin.model.ts
+export type RoleType = 'admin' | 'moderator' | 'user';
+export interface UserListItem {
+  id: number;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  role: RoleType;
+  isActive: boolean;
+  isBanned: boolean;
+  createdAt: string;
+  postCount: number;
+  commentCount: number;
+}
+export interface UserListResponse {
+  users: UserListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+export interface UserDetail {
+  id: number;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  role: RoleType;
+  isActive: boolean;
+  isBanned: boolean;
+  banReason: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  postCount: number;
+  commentCount: number;
+}
+export interface PostAdminListItem {
+  id: number;
+  title: string;
+  authorUsername: string;
+  authorId: number;
+  isLocked: boolean;
+  isDeleted: boolean;
+  upvotes: number;
+  downvotes: number;
+  commentCount: number;
+  createdAt: string;
+  reportsCount: number;
+}
+export interface PostAdminListResponse {
+  posts: PostAdminListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+export interface CommentAdminListItem {
+  id: number;
+  content: string;
+  authorUsername: string;
+  authorId: number;
+  postId: number;
+  postTitle: string;
+  isDeleted: boolean;
+  upvotes: number;
+  downvotes: number;
+  createdAt: string;
+  reportsCount: number;
+}
+export interface CommentAdminListResponse {
+  comments: CommentAdminListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+export interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  bannedUsers: number;
+  totalPosts: number;
+  totalComments: number;
+  postsToday: number;
+  commentsToday: number;
+  newUsersToday: number;
+}
+export interface RecentActivity {
+  type: string;
+  message: string;
+  timestamp: string;
+  userId?: number;
+  postId?: number;
+}
+export interface DashboardResponse {
+  stats: DashboardStats;
+  recentActivity: RecentActivity[];
+}
+export interface RoleInfo {
+  id: number;
+  name: RoleType;
+  permissions: string[];
+  userCount: number;
+}
+export interface ActionResponse {
+  success: boolean;
+  message: string;
+}
+export interface UserPermissions {
+  userId: number;
+  username: string;
+  role: RoleType;
+  permissions: string[];
+  isAdmin: boolean;
+  isModerator: boolean;
+}
 FILE: src/app/core/models/auth.model.ts
 export interface TokenResponseUser {
   id: number;
@@ -442,12 +661,12 @@ export interface Comment {
 FILE: src/app/core/models/notification.model.ts
 export interface Notification {
   id: number;
-  user_id: number;
+  userId: number;
   type: string;
   message: string;
-  link?: string;
-  is_read: boolean;
-  created_at: string;
+  link?: string | null;
+  isRead: boolean;
+  createdAt: string;
 }
 FILE: src/app/core/models/post.model.ts
 export interface Post {
@@ -481,8 +700,353 @@ export interface User {
   email: string;
   avatarUrl: string | null;
   bio: string | null;
-  role: string;
+  role: 'admin' | 'moderator' | 'user';
+  isActive: boolean;
+  isBanned: boolean;
   createdAt: string;
+  updatedAt: string | null;
+}
+export interface UserProfile {
+  id: number;
+  username: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  role: string;
+  postCount: number;
+  commentCount: number;
+  joinedAt: string;
+}
+FILE: src/app/core/services/admin.ts
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
+import { environment } from '../config/environment';
+import {
+  UserListResponse,
+  UserListItem,
+  UserDetail,
+  PostAdminListResponse,
+  PostAdminListItem,
+  CommentAdminListResponse,
+  CommentAdminListItem,
+  DashboardResponse,
+  DashboardStats,
+  RecentActivity,
+  RoleInfo,
+  ActionResponse,
+  RoleType,
+} from '../models/admin.model';
+interface UserListDto {
+  users: {
+    id: number;
+    username: string;
+    email: string;
+    avatar_url: string | null;
+    role: string;
+    is_active: boolean;
+    is_banned: boolean;
+    created_at: string;
+    post_count: number;
+    comment_count: number;
+  }[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+interface UserDetailDto {
+  id: number;
+  username: string;
+  email: string;
+  avatar_url: string | null;
+  bio: string | null;
+  role: string;
+  is_active: boolean;
+  is_banned: boolean;
+  ban_reason: string | null;
+  created_at: string;
+  updated_at: string | null;
+  post_count: number;
+  comment_count: number;
+}
+interface PostListDto {
+  posts: {
+    id: number;
+    title: string;
+    author_username: string;
+    author_id: number;
+    is_locked: boolean;
+    is_deleted: boolean;
+    upvotes: number;
+    downvotes: number;
+    comment_count: number;
+    created_at: string;
+    reports_count: number;
+  }[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+interface CommentListDto {
+  comments: {
+    id: number;
+    content: string;
+    author_username: string;
+    author_id: number;
+    post_id: number;
+    post_title: string;
+    is_deleted: boolean;
+    upvotes: number;
+    downvotes: number;
+    created_at: string;
+    reports_count: number;
+  }[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+interface DashboardDto {
+  stats: {
+    total_users: number;
+    active_users: number;
+    banned_users: number;
+    total_posts: number;
+    total_comments: number;
+    posts_today: number;
+    comments_today: number;
+    new_users_today: number;
+  };
+  recent_activity: {
+    type: string;
+    message: string;
+    timestamp: string;
+    user_id?: number;
+    post_id?: number;
+  }[];
+}
+interface RoleListDto {
+  roles: {
+    id: number;
+    name: string;
+    permissions: string[];
+    user_count: number;
+  }[];
+}
+@Injectable({ providedIn: 'root' })
+export class AdminService {
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = `${environment.apiUrl}/admin`;
+  getDashboard(): Observable<DashboardResponse> {
+    return this.http.get<DashboardDto>(`${this.apiUrl}/dashboard`).pipe(
+      map((dto) => ({
+        stats: {
+          totalUsers: dto.stats.total_users,
+          activeUsers: dto.stats.active_users,
+          bannedUsers: dto.stats.banned_users,
+          totalPosts: dto.stats.total_posts,
+          totalComments: dto.stats.total_comments,
+          postsToday: dto.stats.posts_today,
+          commentsToday: dto.stats.comments_today,
+          newUsersToday: dto.stats.new_users_today,
+        },
+        recentActivity: dto.recent_activity.map((a) => ({
+          type: a.type,
+          message: a.message,
+          timestamp: a.timestamp,
+          userId: a.user_id,
+          postId: a.post_id,
+        })),
+      }))
+    );
+  }
+  getUsers(options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    role?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}): Observable<UserListResponse> {
+    let params = new HttpParams();
+    if (options.page) params = params.set('page', options.page.toString());
+    if (options.pageSize) params = params.set('page_size', options.pageSize.toString());
+    if (options.search) params = params.set('search', options.search);
+    if (options.role) params = params.set('role', options.role);
+    if (options.status) params = params.set('status', options.status);
+    if (options.sortBy) params = params.set('sort_by', options.sortBy);
+    if (options.sortOrder) params = params.set('sort_order', options.sortOrder);
+    return this.http.get<UserListDto>(`${this.apiUrl}/users`, { params }).pipe(
+      map((dto) => ({
+        users: dto.users.map((u) => this.mapUserListItem(u)),
+        total: dto.total,
+        page: dto.page,
+        pageSize: dto.page_size,
+        hasMore: dto.has_more,
+      }))
+    );
+  }
+  getUserDetail(userId: number): Observable<UserDetail> {
+    return this.http.get<UserDetailDto>(`${this.apiUrl}/users/${userId}`).pipe(
+      map((dto) => this.mapUserDetail(dto))
+    );
+  }
+  banUser(userId: number, reason?: string): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/users/${userId}/ban`, {
+      reason,
+    });
+  }
+  unbanUser(userId: number): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/users/${userId}/unban`, {});
+  }
+  changeUserRole(userId: number, role: RoleType): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/users/${userId}/role`, {
+      role,
+    });
+  }
+  deleteUser(userId: number): Observable<ActionResponse> {
+    return this.http.delete<ActionResponse>(`${this.apiUrl}/users/${userId}`);
+  }
+  getPosts(options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: string;
+  } = {}): Observable<PostAdminListResponse> {
+    let params = new HttpParams();
+    if (options.page) params = params.set('page', options.page.toString());
+    if (options.pageSize) params = params.set('page_size', options.pageSize.toString());
+    if (options.search) params = params.set('search', options.search);
+    if (options.status) params = params.set('status', options.status);
+    if (options.sortBy) params = params.set('sort_by', options.sortBy);
+    if (options.sortOrder) params = params.set('sort_order', options.sortOrder);
+    return this.http.get<PostListDto>(`${this.apiUrl}/posts`, { params }).pipe(
+      map((dto) => ({
+        posts: dto.posts.map((p) => this.mapPostListItem(p)),
+        total: dto.total,
+        page: dto.page,
+        pageSize: dto.page_size,
+        hasMore: dto.has_more,
+      }))
+    );
+  }
+  lockPost(postId: number, reason?: string): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/posts/${postId}/lock`, {
+      reason,
+    });
+  }
+  unlockPost(postId: number): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/posts/${postId}/unlock`, {});
+  }
+  deletePost(postId: number): Observable<ActionResponse> {
+    return this.http.delete<ActionResponse>(`${this.apiUrl}/posts/${postId}`);
+  }
+  restorePost(postId: number): Observable<ActionResponse> {
+    return this.http.post<ActionResponse>(`${this.apiUrl}/posts/${postId}/restore`, {});
+  }
+  getComments(options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    postId?: number;
+    status?: string;
+  } = {}): Observable<CommentAdminListResponse> {
+    let params = new HttpParams();
+    if (options.page) params = params.set('page', options.page.toString());
+    if (options.pageSize) params = params.set('page_size', options.pageSize.toString());
+    if (options.search) params = params.set('search', options.search);
+    if (options.postId) params = params.set('post_id', options.postId.toString());
+    if (options.status) params = params.set('status', options.status);
+    return this.http.get<CommentListDto>(`${this.apiUrl}/comments`, { params }).pipe(
+      map((dto) => ({
+        comments: dto.comments.map((c) => this.mapCommentListItem(c)),
+        total: dto.total,
+        page: dto.page,
+        pageSize: dto.page_size,
+        hasMore: dto.has_more,
+      }))
+    );
+  }
+  deleteComment(commentId: number): Observable<ActionResponse> {
+    return this.http.delete<ActionResponse>(`${this.apiUrl}/comments/${commentId}`);
+  }
+  getRoles(): Observable<RoleInfo[]> {
+    return this.http.get<RoleListDto>(`${this.apiUrl}/roles`).pipe(
+      map((dto) =>
+        dto.roles.map((r) => ({
+          id: r.id,
+          name: r.name as RoleType,
+          permissions: r.permissions,
+          userCount: r.user_count,
+        }))
+      )
+    );
+  }
+  private mapUserListItem(dto: UserListDto['users'][0]): UserListItem {
+    return {
+      id: dto.id,
+      username: dto.username,
+      email: dto.email,
+      avatarUrl: dto.avatar_url,
+      role: dto.role as RoleType,
+      isActive: dto.is_active,
+      isBanned: dto.is_banned,
+      createdAt: dto.created_at,
+      postCount: dto.post_count,
+      commentCount: dto.comment_count,
+    };
+  }
+  private mapUserDetail(dto: UserDetailDto): UserDetail {
+    return {
+      id: dto.id,
+      username: dto.username,
+      email: dto.email,
+      avatarUrl: dto.avatar_url,
+      bio: dto.bio,
+      role: dto.role as RoleType,
+      isActive: dto.is_active,
+      isBanned: dto.is_banned,
+      banReason: dto.ban_reason,
+      createdAt: dto.created_at,
+      updatedAt: dto.updated_at,
+      postCount: dto.post_count,
+      commentCount: dto.comment_count,
+    };
+  }
+  private mapPostListItem(dto: PostListDto['posts'][0]): PostAdminListItem {
+    return {
+      id: dto.id,
+      title: dto.title,
+      authorUsername: dto.author_username,
+      authorId: dto.author_id,
+      isLocked: dto.is_locked,
+      isDeleted: dto.is_deleted,
+      upvotes: dto.upvotes,
+      downvotes: dto.downvotes,
+      commentCount: dto.comment_count,
+      createdAt: dto.created_at,
+      reportsCount: dto.reports_count,
+    };
+  }
+  private mapCommentListItem(dto: CommentListDto['comments'][0]): CommentAdminListItem {
+    return {
+      id: dto.id,
+      content: dto.content,
+      authorUsername: dto.author_username,
+      authorId: dto.author_id,
+      postId: dto.post_id,
+      postTitle: dto.post_title,
+      isDeleted: dto.is_deleted,
+      upvotes: dto.upvotes,
+      downvotes: dto.downvotes,
+      createdAt: dto.created_at,
+      reportsCount: dto.reports_count,
+    };
+  }
 }
 FILE: src/app/core/services/auth.ts
 import { Injectable, computed, inject, signal } from '@angular/core';
@@ -507,6 +1071,13 @@ export class Auth {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly storageKey = environment.storageKeys.auth;
+  private _permissionService: PermissionService | null = null;
+  private get permissionService(): PermissionService {
+    if (!this._permissionService) {
+      this._permissionService = inject(PermissionService);
+    }
+    return this._permissionService;
+  }
   private readonly userSignal = signal<User | null>(null);
   private readonly tokenSignal = signal<string | null>(null);
   private readonly readySignal = signal(false);
@@ -547,10 +1118,18 @@ export class Auth {
     const auth = getFirebaseAuth();
     if (auth) await signOut(auth);
     this.clearSession();
+    try {
+      this.permissionService.clearPermissions();
+    } catch (e) {
+    }
     await this.router.navigate(['/login']);
   }
   handleUnauthorized() {
     this.clearSession();
+    try {
+      this.permissionService.clearPermissions();
+    } catch (e) {
+    }
     this.router.navigate(['/login']);
   }
   private async registerWithBackend(credentials: UserCredential, username: string) {
@@ -578,6 +1157,7 @@ export class Auth {
       );
       const user = this.mapUser(response.user);
       this.persistSession(response.access_token, user);
+      await this.loadUserPermissions();
       await this.router.navigateByUrl(this.redirectUrl ?? '/feed');
       this.redirectUrl = null;
     } catch (error) {
@@ -596,15 +1176,27 @@ export class Auth {
       throw error;
     }
   }
+  private async loadUserPermissions() {
+    try {
+      await this.permissionService.loadPermissions();
+    } catch (error) {
+      console.warn('Failed to load user permissions', error);
+    }
+  }
   private mapUser(user: TokenResponse['user']): User {
+    const validRoles = ['admin', 'moderator', 'user'] as const;
+    const role = validRoles.includes(user.role as any) ? (user.role as 'admin' | 'moderator' | 'user') : 'user';
     return {
       id: user.id,
       username: user.username,
       email: user.email,
       avatarUrl: user.avatar_url,
       bio: null,
-      role: user.role ?? 'user',
+      role,
+      isActive: true,
+      isBanned: false,
       createdAt: new Date().toISOString(),
+      updatedAt: null,
     };
   }
   private persistSession(token: string, user: User) {
@@ -619,6 +1211,9 @@ export class Auth {
         const parsed = JSON.parse(cache) as { token: string; user: User };
         this.tokenSignal.set(parsed.token);
         this.userSignal.set(parsed.user);
+        setTimeout(() => {
+          this.loadUserPermissions();
+        }, 0);
       } catch (error) {
         console.warn('Failed to restore session', error);
         this.clearSession();
@@ -655,6 +1250,7 @@ export class Auth {
     return `${uid}@placeholder.local`;
   }
 }
+import { PermissionService } from './permission';
 FILE: src/app/core/services/favorite.ts
 import { Injectable, signal } from '@angular/core';
 @Injectable({ providedIn: 'root' })
@@ -783,6 +1379,215 @@ export class NotificationService {
     this.unreadCountSignal.update((count) => count + 1);
   }
 }
+FILE: src/app/core/services/permission.ts
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../config/environment';
+import { UserPermissions, RoleType } from '../models/admin.model';
+export const Permissions = {
+  CREATE_POST: 'create_post',
+  EDIT_OWN_POST: 'edit_own_post',
+  DELETE_OWN_POST: 'delete_own_post',
+  CREATE_COMMENT: 'create_comment',
+  EDIT_OWN_COMMENT: 'edit_own_comment',
+  DELETE_OWN_COMMENT: 'delete_own_comment',
+  VOTE: 'vote',
+  FAVORITE: 'favorite',
+  DELETE_ANY_POST: 'delete_any_post',
+  DELETE_ANY_COMMENT: 'delete_any_comment',
+  LOCK_POST: 'lock_post',
+  UNLOCK_POST: 'unlock_post',
+  BAN_USER_FROM_THREAD: 'ban_user_from_thread',
+  VIEW_REPORTS: 'view_reports',
+  BAN_USER: 'ban_user',
+  UNBAN_USER: 'unban_user',
+  PROMOTE_USER: 'promote_user',
+  DEMOTE_USER: 'demote_user',
+  DELETE_USER: 'delete_user',
+  VIEW_ALL_USERS: 'view_all_users',
+  MANAGE_ROLES: 'manage_roles',
+  VIEW_ADMIN_DASHBOARD: 'view_admin_dashboard',
+  MANAGE_CATEGORIES: 'manage_categories',
+} as const;
+const AUTH_STORAGE_KEY = environment.storageKeys?.auth ?? 'meme_forum_auth';
+interface StoredAuthData {
+  token: string;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    role: string;
+    avatarUrl: string | null;
+    bio: string | null;
+    isActive: boolean;
+    isBanned: boolean;
+    createdAt: string;
+    updatedAt: string | null;
+  };
+}
+@Injectable({ providedIn: 'root' })
+export class PermissionService {
+  private readonly http = inject(HttpClient);
+  private readonly permissionsSignal = signal<UserPermissions | null>(null);
+  private readonly loadingSignal = signal(false);
+  readonly permissions = this.permissionsSignal.asReadonly();
+  readonly loading = this.loadingSignal.asReadonly();
+  readonly isAdmin = computed(() => {
+    const perms = this.permissionsSignal();
+    return perms?.isAdmin ?? false;
+  });
+  readonly isModerator = computed(() => {
+    const perms = this.permissionsSignal();
+    return perms?.isModerator ?? false;
+  });
+  readonly userRole = computed(() => {
+    const perms = this.permissionsSignal();
+    return perms?.role ?? 'user';
+  });
+  constructor() {
+    if (this.isUserAuthenticated()) {
+      this.loadPermissions();
+    }
+  }
+  private isUserAuthenticated(): boolean {
+    try {
+      const authData = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!authData) return false;
+      const parsed = JSON.parse(authData) as StoredAuthData;
+      return !!parsed.token;
+    } catch {
+      return false;
+    }
+  }
+  private getStoredUser(): StoredAuthData['user'] | null {
+    try {
+      const authData = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!authData) return null;
+      const parsed = JSON.parse(authData) as StoredAuthData;
+      return parsed.user ?? null;
+    } catch {
+      return null;
+    }
+  }
+  getCurrentUserId(): number | null {
+    const user = this.getStoredUser();
+    return user?.id ?? null;
+  }
+  async loadPermissions(): Promise<void> {
+    if (!this.isUserAuthenticated()) {
+      this.permissionsSignal.set(null);
+      return;
+    }
+    this.loadingSignal.set(true);
+    try {
+      const response = await this.http
+        .get<{
+          user_id: number;
+          username: string;
+          role: RoleType;
+          permissions: string[];
+          is_admin: boolean;
+          is_moderator: boolean;
+        }>(`${environment.apiUrl}/admin/me/permissions`)
+        .toPromise();
+      if (response) {
+        this.permissionsSignal.set({
+          userId: response.user_id,
+          username: response.username,
+          role: response.role,
+          permissions: response.permissions,
+          isAdmin: response.is_admin,
+          isModerator: response.is_moderator,
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to load permissions from server, using local data', error);
+      const user = this.getStoredUser();
+      if (user) {
+        this.permissionsSignal.set({
+          userId: user.id,
+          username: user.username,
+          role: (user.role as RoleType) || 'user',
+          permissions: this.getDefaultPermissionsForRole(user.role),
+          isAdmin: user.role === 'admin',
+          isModerator: user.role === 'admin' || user.role === 'moderator',
+        });
+      } else {
+        this.permissionsSignal.set(null);
+      }
+    } finally {
+      this.loadingSignal.set(false);
+    }
+  }
+  private getDefaultPermissionsForRole(role: string): string[] {
+    const userPermissions = [
+      Permissions.CREATE_POST,
+      Permissions.EDIT_OWN_POST,
+      Permissions.DELETE_OWN_POST,
+      Permissions.CREATE_COMMENT,
+      Permissions.EDIT_OWN_COMMENT,
+      Permissions.DELETE_OWN_COMMENT,
+      Permissions.VOTE,
+      Permissions.FAVORITE,
+    ];
+    const moderatorPermissions = [
+      ...userPermissions,
+      Permissions.DELETE_ANY_POST,
+      Permissions.DELETE_ANY_COMMENT,
+      Permissions.LOCK_POST,
+      Permissions.UNLOCK_POST,
+      Permissions.BAN_USER_FROM_THREAD,
+      Permissions.VIEW_REPORTS,
+    ];
+    const adminPermissions = [
+      ...moderatorPermissions,
+      Permissions.BAN_USER,
+      Permissions.UNBAN_USER,
+      Permissions.PROMOTE_USER,
+      Permissions.DEMOTE_USER,
+      Permissions.DELETE_USER,
+      Permissions.VIEW_ALL_USERS,
+      Permissions.MANAGE_ROLES,
+      Permissions.VIEW_ADMIN_DASHBOARD,
+      Permissions.MANAGE_CATEGORIES,
+    ];
+    switch (role) {
+      case 'admin':
+        return adminPermissions;
+      case 'moderator':
+        return moderatorPermissions;
+      default:
+        return userPermissions;
+    }
+  }
+  hasPermission(permission: string): boolean {
+    const perms = this.permissionsSignal();
+    if (!perms) return false;
+    return perms.permissions.includes(permission);
+  }
+  hasAnyPermission(permissions: string[]): boolean {
+    return permissions.some((p) => this.hasPermission(p));
+  }
+  hasAllPermissions(permissions: string[]): boolean {
+    return permissions.every((p) => this.hasPermission(p));
+  }
+  canModerateContent(contentUserId: number): boolean {
+    const currentUserId = this.getCurrentUserId();
+    if (!currentUserId) return false;
+    if (currentUserId === contentUserId) return true;
+    return this.isModerator();
+  }
+  isOwner(resourceUserId: number): boolean {
+    const currentUserId = this.getCurrentUserId();
+    return currentUserId !== null && currentUserId === resourceUserId;
+  }
+  clearPermissions(): void {
+    this.permissionsSignal.set(null);
+  }
+  async refreshPermissions(): Promise<void> {
+    await this.loadPermissions();
+  }
+}
 FILE: src/app/core/services/theme.ts
 import { Injectable } from '@angular/core';
 @Injectable({
@@ -790,11 +1595,128 @@ import { Injectable } from '@angular/core';
 })
 export class Theme {
 }
+FILE: src/app/core/services/vote-state.ts
+import { Injectable, inject, signal, computed, effect } from '@angular/core';
+import { Websocket, VoteUpdate } from './websocket';
+import { Auth } from './auth';
+interface VoteCache {
+  upvotes: number;
+  downvotes: number;
+  userVote: 'up' | 'down' | null;
+  timestamp: number;
+}
+@Injectable({ providedIn: 'root' })
+export class VoteState {
+  private readonly websocket = inject(Websocket);
+  private readonly auth = inject(Auth);
+  private readonly postVotes = signal<Map<number, VoteCache>>(new Map());
+  private readonly commentVotes = signal<Map<number, VoteCache>>(new Map());
+  private readonly pendingVotes = signal<Set<string>>(new Set());
+  constructor() {
+    effect(() => {
+      if (this.auth.isAuthenticated()) {
+        this.initializeWebSocket();
+      }
+    }, { allowSignalWrites: true });
+  }
+  private initializeWebSocket() {
+    this.websocket.registerHandler('vote_update', (payload: unknown) => {
+      this.handleVoteUpdate(payload as VoteUpdate);
+    });
+  }
+  private handleVoteUpdate(update: VoteUpdate) {
+    const userId = this.auth.user()?.id;
+    if (!userId) return;
+    const userVote = update.userVotes[userId] ?? null;
+    const cache: VoteCache = {
+      upvotes: update.upvotes,
+      downvotes: update.downvotes,
+      userVote,
+      timestamp: Date.now()
+    };
+    if (update.commentId) {
+      this.commentVotes.update(map => {
+        const newMap = new Map(map);
+        newMap.set(update.commentId!, cache);
+        return newMap;
+      });
+    } else {
+      this.postVotes.update(map => {
+        const newMap = new Map(map);
+        newMap.set(update.postId, cache);
+        return newMap;
+      });
+    }
+    const voteKey = update.commentId
+      ? `comment-${update.commentId}`
+      : `post-${update.postId}`;
+    this.pendingVotes.update(set => {
+      const newSet = new Set(set);
+      newSet.delete(voteKey);
+      return newSet;
+    });
+  }
+  getPostVote(postId: number): VoteCache | null {
+    return this.postVotes().get(postId) ?? null;
+  }
+  getCommentVote(commentId: number): VoteCache | null {
+    return this.commentVotes().get(commentId) ?? null;
+  }
+  isPending(type: 'post' | 'comment', id: number): boolean {
+    const key = `${type}-${id}`;
+    return this.pendingVotes().has(key);
+  }
+  setPending(type: 'post' | 'comment', id: number, pending: boolean) {
+    const key = `${type}-${id}`;
+    this.pendingVotes.update(set => {
+      const newSet = new Set(set);
+      if (pending) {
+        newSet.add(key);
+      } else {
+        newSet.delete(key);
+      }
+      return newSet;
+    });
+  }
+  optimisticVote(type: 'post' | 'comment', id: number, vote: 'up' | 'down' | null, currentVote: 'up' | 'down' | null) {
+    const map = type === 'post' ? this.postVotes : this.commentVotes;
+    const current = (type === 'post' ? this.getPostVote(id) : this.getCommentVote(id)) ?? {
+      upvotes: 0,
+      downvotes: 0,
+      userVote: currentVote,
+      timestamp: Date.now()
+    };
+    let newUpvotes = current.upvotes;
+    let newDownvotes = current.downvotes;
+    if (currentVote === 'up') newUpvotes--;
+    else if (currentVote === 'down') newDownvotes--;
+    if (vote === 'up') newUpvotes++;
+    else if (vote === 'down') newDownvotes++;
+    const optimisticCache: VoteCache = {
+      upvotes: newUpvotes,
+      downvotes: newDownvotes,
+      userVote: vote,
+      timestamp: Date.now()
+    };
+    map.update(m => {
+      const newMap = new Map(m);
+      newMap.set(id, optimisticCache);
+      return newMap;
+    });
+  }
+}
 FILE: src/app/core/services/websocket.ts
 import { inject, Injectable, signal, effect } from '@angular/core';
 import { environment } from '../config/environment';
 import { Auth } from './auth';
 type Handler = (payload: unknown) => void;
+export interface VoteUpdate {
+  postId: number;
+  commentId?: number;
+  upvotes: number;
+  downvotes: number;
+  userVotes: { [userId: number]: 'up' | 'down' | null };
+}
 @Injectable({ providedIn: 'root' })
 export class Websocket {
   private readonly auth = inject(Auth);
@@ -802,6 +1724,8 @@ export class Websocket {
   private readonly handlers = new Map<string, Set<Handler>>();
   private reconnectAttempts = 0;
   private readonly connecting = signal(false);
+  private readonly connected = signal(false);
+  readonly isConnected = this.connected.asReadonly();
   constructor() {
     effect(() => {
       if (this.auth.isAuthenticated()) {
@@ -816,6 +1740,9 @@ export class Websocket {
       this.handlers.set(type, new Set());
     }
     this.handlers.get(type)!.add(handler);
+    if (this.connected() && type === 'vote') {
+      this.send({ type: 'subscribe_votes' });
+    }
   }
   unregisterHandler(type: string, handler: Handler) {
     this.handlers.get(type)?.delete(handler);
@@ -823,6 +1750,8 @@ export class Websocket {
   send(message: unknown) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(message));
+    } else {
+      console.warn('WebSocket not connected, queuing message');
     }
   }
   private connect() {
@@ -836,24 +1765,33 @@ export class Websocket {
     url.searchParams.set('token', token);
     this.socket = new WebSocket(url.toString());
     this.socket.onopen = () => {
+      console.log('WebSocket connected');
       this.reconnectAttempts = 0;
       this.connecting.set(false);
+      this.connected.set(true);
+      this.send({ type: 'subscribe_votes' });
     };
     this.socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         const type = data?.type ?? 'message';
         this.handlers.get(type)?.forEach((handler) => handler(data));
+        if (type === 'vote_update') {
+          this.handlers.get('vote')?.forEach((handler) => handler(data));
+        }
       } catch (error) {
         console.error('Failed to parse WebSocket message', error);
       }
     };
     this.socket.onclose = () => {
+      console.log('WebSocket disconnected');
       this.socket = null;
       this.connecting.set(false);
+      this.connected.set(false);
       this.scheduleReconnect();
     };
-    this.socket.onerror = () => {
+    this.socket.onerror = (error) => {
+      console.error('WebSocket error', error);
       this.socket?.close();
     };
   }
@@ -861,6 +1799,7 @@ export class Websocket {
     if (!this.auth.isAuthenticated()) return;
     const delay = Math.min(30000, 1000 * 2 ** this.reconnectAttempts);
     this.reconnectAttempts += 1;
+    console.log(`Reconnecting WebSocket in ${delay}ms (attempt ${this.reconnectAttempts})`);
     setTimeout(() => {
       if (this.auth.isAuthenticated()) {
         this.connect();
@@ -873,6 +1812,2190 @@ export class Websocket {
     this.socket = null;
     this.reconnectAttempts = 0;
     this.connecting.set(false);
+    this.connected.set(false);
+  }
+}
+FILE: src/app/features/admin/admin-comments/admin-comments.css
+.admin-comments {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.back-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-link:hover {
+  color: var(--primary-orange);
+}
+.filters-section {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+.search-box input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+.search-box .material-icons {
+  color: var(--text-secondary);
+}
+.filters-section select {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+}
+.comments-table-container {
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+}
+.comments-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.comments-table th,
+.comments-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-primary);
+}
+.comments-table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.comments-table tr:hover {
+  background: var(--bg-hover);
+}
+.comments-table tr.deleted {
+  opacity: 0.5;
+}
+.content-cell {
+  max-width: 300px;
+  color: var(--text-primary);
+}
+.post-cell a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.post-cell a:hover {
+  color: var(--primary-orange);
+}
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+.status-badge.deleted {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.votes {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+}
+.votes .up {
+  color: #22c55e;
+}
+.votes .down {
+  color: #ef4444;
+}
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+.action-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.action-btn.delete:hover {
+  color: #ef4444;
+}
+.empty-message {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 40px !important;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+.pagination button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.pagination button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pagination span {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+FILE: src/app/features/admin/admin-comments/admin-comments.html
+<div class="admin-comments">
+  <div class="page-header">
+    <h1>Comment Management</h1>
+    <a routerLink="/admin" class="back-link">
+      <span class="material-icons">arrow_back</span>
+      Back to Dashboard
+    </a>
+  </div>
+
+  <div class="filters-section">
+    <div class="search-box">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        placeholder="Search comments..."
+        (keyup.enter)="applyFilters()"
+      />
+    </div>
+
+    <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="deleted">Deleted</option>
+    </select>
+  </div>
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else {
+    <div class="comments-table-container">
+      <table class="comments-table">
+        <thead>
+          <tr>
+            <th>Content</th>
+            <th>Author</th>
+            <th>Post</th>
+            <th>Status</th>
+            <th>Votes</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (comment of comments(); track comment.id) {
+            <tr [class.deleted]="comment.isDeleted">
+              <td class="content-cell">
+                <span [title]="comment.content">{{ truncateContent(comment.content) }}</span>
+              </td>
+              <td>{{ comment.authorUsername }}</td>
+              <td class="post-cell">
+                <a [routerLink]="['/post', comment.postId]" [title]="comment.postTitle">
+                  {{ truncateContent(comment.postTitle, 30) }}
+                </a>
+              </td>
+              <td>
+                @if (comment.isDeleted) {
+                  <span class="status-badge deleted">Deleted</span>
+                } @else {
+                  <span class="status-badge active">Active</span>
+                }
+              </td>
+              <td>
+                <span class="votes">
+                  <span class="up">↑{{ comment.upvotes }}</span>
+                  <span class="down">↓{{ comment.downvotes }}</span>
+                </span>
+              </td>
+              <td>{{ formatDate(comment.createdAt) }}</td>
+              <td class="actions-cell">
+                @if (!comment.isDeleted) {
+                  <button
+                    class="action-btn delete"
+                    title="Delete"
+                    (click)="deleteComment(comment)"
+                  >
+                    <span class="material-icons">delete</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-message">No comments found</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button (click)="prevPage()" [disabled]="currentPage() === 1">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <span>Page {{ currentPage() }} of {{ Math.ceil(total() / pageSize) || 1 }}</span>
+      <button (click)="nextPage()" [disabled]="currentPage() * pageSize >= total()">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  }
+</div>
+FILE: src/app/features/admin/admin-comments/admin-comments.ts
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AdminService } from '../../../core/services/admin';
+import { CommentAdminListItem } from '../../../core/models/admin.model';
+import { LoadingSpinner } from '../../../shared/components/loading-spinner/loading-spinner';
+@Component({
+  selector: 'app-admin-comments',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink, LoadingSpinner],
+  templateUrl: './admin-comments.html',
+  styleUrl: './admin-comments.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class AdminComments implements OnInit {
+  private readonly adminService = inject(AdminService);
+  readonly comments = signal<CommentAdminListItem[]>([]);
+  readonly isLoading = signal(true);
+  readonly total = signal(0);
+  readonly currentPage = signal(1);
+  readonly pageSize = 20;
+  searchQuery = '';
+  statusFilter = '';
+  readonly Math = Math;
+  ngOnInit() {
+    this.loadComments();
+  }
+  loadComments() {
+    this.isLoading.set(true);
+    this.adminService.getComments({
+      page: this.currentPage(),
+      pageSize: this.pageSize,
+      search: this.searchQuery || undefined,
+      status: this.statusFilter || undefined,
+    }).subscribe({
+      next: (response) => {
+        this.comments.set(response.comments);
+        this.total.set(response.total);
+        this.isLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load comments', err);
+        this.isLoading.set(false);
+      },
+    });
+  }
+  applyFilters() {
+    this.currentPage.set(1);
+    this.loadComments();
+  }
+  deleteComment(comment: CommentAdminListItem) {
+    if (!confirm('Delete this comment?')) return;
+    this.adminService.deleteComment(comment.id).subscribe({
+      next: () => this.loadComments(),
+      error: (err) => alert('Failed to delete comment'),
+    });
+  }
+  nextPage() {
+    if (this.currentPage() * this.pageSize < this.total()) {
+      this.currentPage.update(p => p + 1);
+      this.loadComments();
+    }
+  }
+  prevPage() {
+    if (this.currentPage() > 1) {
+      this.currentPage.update(p => p - 1);
+      this.loadComments();
+    }
+  }
+  formatDate(date: string): string {
+    return new Date(date).toLocaleDateString();
+  }
+  truncateContent(content: string, maxLength: number = 100): string {
+    if (content.length <= maxLength) return content;
+    return content.substring(0, maxLength) + '...';
+  }
+}
+FILE: src/app/features/admin/admin-dashboard/admin-dashboard.css
+.admin-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.dashboard-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--bg-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  transition: all 0.2s;
+}
+.refresh-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.refresh-btn:disabled {
+  opacity: 0.5;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-icon.users { background: rgba(99, 102, 241, 0.2); color: #6366f1; }
+.stat-icon.active { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+.stat-icon.banned { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+.stat-icon.posts { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+.stat-icon.comments { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+.stat-icon.today { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+.stat-content {
+  display: flex;
+  flex-direction: column;
+}
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.dashboard-sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 768px) {
+  .dashboard-sections {
+    grid-template-columns: 1fr;
+  }
+}
+.quick-actions,
+.recent-activity {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 20px;
+}
+.quick-actions h2,
+.recent-activity h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.action-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-orange);
+}
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+}
+.activity-icon {
+  color: var(--text-secondary);
+}
+.activity-content {
+  flex: 1;
+}
+.activity-content p {
+  color: var(--text-primary);
+  font-size: 14px;
+  margin: 0 0 4px 0;
+}
+.activity-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.no-activity {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 20px;
+}
+.error-message {
+  text-align: center;
+  padding: 40px;
+  color: var(--error);
+}
+.error-message .material-icons {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+.error-message button {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+FILE: src/app/features/admin/admin-dashboard/admin-dashboard.html
+<div class="admin-dashboard">
+  <div class="dashboard-header">
+    <h1>Admin Dashboard</h1>
+    <button class="refresh-btn" (click)="loadDashboard()" [disabled]="isLoading()">
+      <span class="material-icons">refresh</span>
+    </button>
+  </div>
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else if (error()) {
+    <div class="error-message">
+      <span class="material-icons">error</span>
+      <p>{{ error() }}</p>
+      <button (click)="loadDashboard()">Retry</button>
+    </div>
+  } @else if (stats(); as stats) {
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon users">
+          <span class="material-icons">people</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalUsers }}</span>
+          <span class="stat-label">Total Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon active">
+          <span class="material-icons">check_circle</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.activeUsers }}</span>
+          <span class="stat-label">Active Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon banned">
+          <span class="material-icons">block</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.bannedUsers }}</span>
+          <span class="stat-label">Banned Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon posts">
+          <span class="material-icons">article</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalPosts }}</span>
+          <span class="stat-label">Total Posts</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon comments">
+          <span class="material-icons">comment</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalComments }}</span>
+          <span class="stat-label">Total Comments</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon today">
+          <span class="material-icons">today</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.postsToday }}</span>
+          <span class="stat-label">Posts Today</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-sections">
+      <div class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+          <a routerLink="/admin/users" class="action-btn">
+            <span class="material-icons">manage_accounts</span>
+            <span>Manage Users</span>
+          </a>
+          <a routerLink="/admin/posts" class="action-btn">
+            <span class="material-icons">article</span>
+            <span>Manage Posts</span>
+          </a>
+          <a routerLink="/admin/comments" class="action-btn">
+            <span class="material-icons">comment</span>
+            <span>Manage Comments</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="recent-activity">
+        <h2>Recent Activity</h2>
+        <div class="activity-list">
+          @for (activity of recentActivity(); track activity.timestamp) {
+            <div class="activity-item">
+              <span class="material-icons activity-icon">{{ getActivityIcon(activity.type) }}</span>
+              <div class="activity-content">
+                <p>{{ activity.message }}</p>
+                <span class="activity-time">{{ formatTime(activity.timestamp) }}</span>
+              </div>
+            </div>
+          } @empty {
+            <p class="no-activity">No recent activity</p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
+FILE: src/app/features/admin/admin-dashboard/admin-dashboard.ts
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { AdminService } from '../../../core/services/admin';
+import { DashboardStats, RecentActivity } from '../../../core/models/admin.model';
+import { LoadingSpinner } from '../../../shared/components/loading-spinner/loading-spinner';
+@Component({
+  selector: 'app-admin-dashboard',
+  standalone: true,
+  imports: [CommonModule, RouterLink, LoadingSpinner],
+  templateUrl: './admin-dashboard.html',
+  styleUrl: './admin-dashboard.css',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class AdminDashboard implements OnInit {
+  private readonly adminService = inject(AdminService);
+  readonly stats = signal<DashboardStats | null>(null);
+  readonly recentActivity = signal<RecentActivity[]>([]);
+  readonly isLoading = signal(true);
+  readonly error = signal<string | null>(null);
+  ngOnInit() {
+    this.loadDashboard();
+  }
+  loadDashboard() {
+    this.isLoading.set(true);
+    this.error.set(null);
+    this.adminService.getDashboard().subscribe({
+      next: (response) => {
+        this.stats.set(response.stats);
+        this.recentActivity.set(response.recentActivity);
+        this.isLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Failed to load dashboard', err);
+        this.error.set('Failed to load dashboard data');
+        this.isLoading.set(false);
+      },
+    });
+  }
+  formatTime(timestamp: string): string {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = (now.getTime() - date.getTime()) / 1000;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+  }
+  getActivityIcon(type: string): string {
+    switch (type) {
+      case 'user_joined':
+        return 'person_add';
+      case 'post_created':
+        return 'article';
+      case 'comment_created':
+        return 'comment';
+      case 'user_banned':
+        return 'block';
+      default:
+        return 'info';
+    }
+  }
+}
+FILE: src/app/features/admin/admin-posts/admin-posts.css
+.admin-posts {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.page-header {
+  margin-bottom: 24px;
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1b;
+    margin: 0 0 8px 0;
+  }
+  .subtitle {
+    color: #7c7c7c;
+    margin: 0;
+  }
+}
+.filters-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #edeff1;
+}
+.search-box {
+  display: flex;
+  flex: 1;
+  min-width: 250px;
+  input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #edeff1;
+    border-radius: 4px 0 0 4px;
+    font-size: 14px;
+    &:focus {
+      outline: none;
+      border-color: #0079d3;
+    }
+  }
+  .btn-search {
+    padding: 10px 16px;
+    background: #0079d3;
+    color: white;
+    border: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    &:hover {
+      background: #006cbd;
+    }
+  }
+}
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  label {
+    font-size: 14px;
+    color: #576f76;
+  }
+  select {
+    padding: 10px 14px;
+    border: 1px solid #edeff1;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    &:focus {
+      outline: none;
+      border-color: #0079d3;
+    }
+  }
+  .btn-sort-order {
+    padding: 10px 12px;
+    background: #f6f7f8;
+    border: 1px solid #edeff1;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background: #edeff1;
+    }
+  }
+}
+.error-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fff3f3;
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  color: #cc0000;
+  margin-bottom: 16px;
+  button {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #cc0000;
+  }
+}
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60px;
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #edeff1;
+    border-top-color: #0079d3;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  p {
+    margin-top: 16px;
+    color: #7c7c7c;
+  }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.table-container {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #edeff1;
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  th, td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #edeff1;
+  }
+  th {
+    background: #f6f7f8;
+    font-weight: 600;
+    color: #1a1a1b;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td {
+    font-size: 14px;
+    color: #1a1a1b;
+  }
+  tbody tr:hover {
+    background: #f8f9fa;
+  }
+  .title-cell a {
+    color: #0079d3;
+    text-decoration: none;
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    &.status-active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    &.status-locked {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+    &.status-deleted {
+      background: #ffebee;
+      color: #c62828;
+    }
+  }
+  .votes {
+    .upvotes {
+      color: #ff4500;
+    }
+    .downvotes {
+      color: #7193ff;
+    }
+  }
+  .actions-cell {
+    display: flex;
+    gap: 8px;
+  }
+  .btn-action {
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    text-decoration: none;
+    &:hover {
+      opacity: 0.8;
+    }
+    &.btn-lock {
+      background: #fff3e0;
+    }
+    &.btn-unlock {
+      background: #e8f5e9;
+    }
+    &.btn-delete {
+      background: #ffebee;
+    }
+    &.btn-restore {
+      background: #e3f2fd;
+    }
+    &.btn-view {
+      background: #f3e5f5;
+    }
+  }
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 0 0 8px 8px;
+  border: 1px solid #edeff1;
+  border-top: none;
+  .btn-page {
+    padding: 8px 16px;
+    background: #0079d3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover:not(:disabled) {
+      background: #006cbd;
+    }
+    &:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  }
+  .page-info {
+    font-size: 14px;
+    color: #576f76;
+    .total-count {
+      color: #7c7c7c;
+    }
+  }
+}
+.empty-state {
+  text-align: center;
+  padding: 60px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #edeff1;
+  .empty-icon {
+    font-size: 48px;
+  }
+  h3 {
+    margin: 16px 0 8px;
+    color: #1a1a1b;
+  }
+  p {
+    color: #7c7c7c;
+  }
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  overflow: hidden;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #edeff1;
+  h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .btn-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #7c7c7c;
+    &:hover {
+      color: #1a1a1b;
+    }
+  }
+}
+.modal-body {
+  padding: 20px;
+  .form-group {
+    margin-top: 16px;
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #edeff1;
+      border-radius: 4px;
+      font-size: 14px;
+      resize: vertical;
+      &:focus {
+        outline: none;
+        border-color: #0079d3;
+      }
+    }
+  }
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #edeff1;
+  .btn-cancel {
+    padding: 10px 20px;
+    background: #f6f7f8;
+    border: 1px solid #edeff1;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background: #edeff1;
+    }
+  }
+  .btn-confirm {
+    padding: 10px 20px;
+    background: #ff4500;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    &:hover {
+      background: #e03d00;
+    }
+  }
+}
+FILE: src/app/features/admin/admin-posts/admin-posts.html
+<div class="admin-posts">
+  <div class="page-header">
+    <h1>Manage Posts</h1>
+    <p class="subtitle">View and moderate all posts</p>
+  </div>
+
+
+  <div class="filters-section">
+    <div class="search-box">
+      <input
+        type="text"
+        placeholder="Search posts..."
+        [value]="searchQuery()"
+        (input)="searchQuery.set($any($event.target).value)"
+        (keyup.enter)="onSearch()"
+      />
+      <button class="btn-search" (click)="onSearch()">
+        <span>🔍</span>
+      </button>
+    </div>
+
+    <div class="filter-group">
+      <label>Status:</label>
+      <select
+        [value]="statusFilter()"
+        (change)="statusFilter.set($any($event.target).value); onFilterChange()"
+      >
+        <option value="all">All</option>
+        <option value="active">Active</option>
+        <option value="locked">Locked</option>
+        <option value="deleted">Deleted</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Sort:</label>
+      <select
+        [value]="sortBy()"
+        (change)="sortBy.set($any($event.target).value); onFilterChange()"
+      >
+        <option value="created_at">Date Created</option>
+        <option value="upvotes">Upvotes</option>
+        <option value="comment_count">Comments</option>
+        <option value="reports_count">Reports</option>
+      </select>
+      <button
+        class="btn-sort-order"
+        (click)="sortOrder.set(sortOrder() === 'asc' ? 'desc' : 'asc'); onFilterChange()"
+      >
+        {{ sortOrder() === 'asc' ? '↑' : '↓' }}
+      </button>
+    </div>
+  </div>
+
+
+  @if (error()) {
+    <div class="error-message">
+      {{ error() }}
+      <button (click)="error.set(null)">✕</button>
+    </div>
+  }
+
+
+  @if (loading()) {
+    <div class="loading-spinner">
+      <div class="spinner"></div>
+      <p>Loading posts...</p>
+    </div>
+  }
+
+
+  @if (!loading() && posts().length > 0) {
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Status</th>
+            <th>Votes</th>
+            <th>Comments</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (post of posts(); track post.id) {
+            <tr [class]="getStatusClass(post)">
+              <td>{{ post.id }}</td>
+              <td class="title-cell">
+                <a [routerLink]="['/posts', post.id]" target="_blank">
+                  {{ post.title | slice:0:50 }}{{ post.title.length > 50 ? '...' : '' }}
+                </a>
+              </td>
+              <td>
+                <a [routerLink]="['/admin/users']" [queryParams]="{search: post.author_username}">
+                  {{ post.author_username }}
+                </a>
+              </td>
+              <td>
+                <span class="status-badge" [class]="getStatusClass(post)">
+                  {{ getStatusText(post) }}
+                </span>
+              </td>
+              <td>
+                <span class="votes">
+                  <span class="upvotes">+{{ post.upvotes }}</span>
+                  /
+                  <span class="downvotes">-{{ post.downvotes }}</span>
+                </span>
+              </td>
+              <td>{{ post.comment_count }}</td>
+              <td>{{ formatDate(post.created_at) }}</td>
+              <td class="actions-cell">
+                @if (!post.is_deleted) {
+                  @if (post.is_locked) {
+                    <button class="btn-action btn-unlock" (click)="unlockPost(post)" title="Unlock">
+                      🔓
+                    </button>
+                  } @else {
+                    <button class="btn-action btn-lock" (click)="openLockModal(post)" title="Lock">
+                      🔒
+                    </button>
+                  }
+                  <button class="btn-action btn-delete" (click)="deletePost(post)" title="Delete">
+                    🗑️
+                  </button>
+                } @else {
+                  <button class="btn-action btn-restore" (click)="restorePost(post)" title="Restore">
+                    ♻️
+                  </button>
+                }
+                <a class="btn-action btn-view" [routerLink]="['/posts', post.id]" target="_blank" title="View">
+                  👁️
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+
+    <div class="pagination">
+      <button
+        class="btn-page"
+        [disabled]="!hasPrevious()"
+        (click)="previousPage()"
+      >
+        ← Previous
+      </button>
+
+      <span class="page-info">
+        Page {{ currentPage() }} of {{ totalPages() }}
+        <span class="total-count">({{ total() }} posts)</span>
+      </span>
+
+      <button
+        class="btn-page"
+        [disabled]="!hasMore()"
+        (click)="nextPage()"
+      >
+        Next →
+      </button>
+    </div>
+  }
+
+
+  @if (!loading() && posts().length === 0) {
+    <div class="empty-state">
+      <span class="empty-icon">📭</span>
+      <h3>No posts found</h3>
+      <p>Try adjusting your search or filters</p>
+    </div>
+  }
+
+
+  @if (showLockModal()) {
+    <div class="modal-overlay" (click)="closeLockModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Lock Post</h2>
+          <button class="btn-close" (click)="closeLockModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <p>You are about to lock: <strong>{{ selectedPost()?.title }}</strong></p>
+          <div class="form-group">
+            <label for="lockReason">Reason (optional):</label>
+            <textarea
+              id="lockReason"
+              [value]="lockReason()"
+              (input)="lockReason.set($any($event.target).value)"
+              placeholder="Enter reason for locking this post..."
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="closeLockModal()">Cancel</button>
+          <button class="btn-confirm" (click)="lockPost()">Lock Post</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+FILE: src/app/features/admin/admin-posts/admin-posts.ts
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AdminService } from '../../../core/services/admin';
+interface AdminPost {
+  id: number;
+  title: string;
+  author_username: string;
+  author_id: number;
+  is_locked: boolean;
+  is_deleted: boolean;
+  upvotes: number;
+  downvotes: number;
+  comment_count: number;
+  created_at: string;
+  reports_count: number;
+}
+@Component({
+  selector: 'app-admin-posts',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink],
+  templateUrl: './admin-posts.html',
+  styleUrls: ['./admin-posts.css']
+})
+export class AdminPosts implements OnInit {
+  private adminService = inject(AdminService);
+  posts = signal<AdminPost[]>([]);
+  total = signal(0);
+  currentPage = signal(1);
+  pageSize = 20;
+  loading = signal(false);
+  error = signal<string | null>(null);
+  searchQuery = signal('');
+  statusFilter = signal<string>('all');
+  sortBy = signal('created_at');
+  sortOrder = signal<'asc' | 'desc'>('desc');
+  totalPages = computed(() => Math.ceil(this.total() / this.pageSize) || 1);
+  hasMore = computed(() => this.currentPage() * this.pageSize < this.total());
+  hasPrevious = computed(() => this.currentPage() > 1);
+  showLockModal = signal(false);
+  selectedPost = signal<AdminPost | null>(null);
+  lockReason = signal('');
+  ngOnInit(): void {
+    this.loadPosts();
+  }
+   loadPosts(): void {
+    this.loading.set(true);
+    this.error.set(null);
+    const params = {
+      page: this.currentPage(),
+      page_size: this.pageSize,
+      search: this.searchQuery() || undefined,
+      status: this.statusFilter() !== 'all' ? this.statusFilter() : undefined,
+      sort_by: this.sortBy(),
+      sort_order: this.sortOrder()
+    };
+    this.adminService.getPosts(params).subscribe({
+      next: (response: any) => {
+        const posts = response.items || response.posts || [];
+        this.posts.set(posts);
+        this.total.set(response.total || 0);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to load posts');
+        this.loading.set(false);
+      }
+    });
+  }
+  onSearch(): void {
+    this.currentPage.set(1);
+    this.loadPosts();
+  }
+  onFilterChange(): void {
+    this.currentPage.set(1);
+    this.loadPosts();
+  }
+  onSortChange(field: string): void {
+    if (this.sortBy() === field) {
+      this.sortOrder.set(this.sortOrder() === 'asc' ? 'desc' : 'asc');
+    } else {
+      this.sortBy.set(field);
+      this.sortOrder.set('desc');
+    }
+    this.loadPosts();
+  }
+  nextPage(): void {
+    if (this.hasMore()) {
+      this.currentPage.update(p => p + 1);
+      this.loadPosts();
+    }
+  }
+  previousPage(): void {
+    if (this.hasPrevious()) {
+      this.currentPage.update(p => p - 1);
+      this.loadPosts();
+    }
+  }
+  goToPage(page: number): void {
+    if (page >= 1 && page <= this.totalPages()) {
+      this.currentPage.set(page);
+      this.loadPosts();
+    }
+  }
+  openLockModal(post: AdminPost): void {
+    this.selectedPost.set(post);
+    this.lockReason.set('');
+    this.showLockModal.set(true);
+  }
+  closeLockModal(): void {
+    this.showLockModal.set(false);
+    this.selectedPost.set(null);
+    this.lockReason.set('');
+  }
+  lockPost(): void {
+    const post = this.selectedPost();
+    if (!post) return;
+    this.adminService.lockPost(post.id, this.lockReason()).subscribe({
+      next: () => {
+        this.closeLockModal();
+        this.loadPosts();
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to lock post');
+      }
+    });
+  }
+  unlockPost(post: AdminPost): void {
+    if (!confirm(`Unlock post "${post.title}"?`)) return;
+    this.adminService.unlockPost(post.id).subscribe({
+      next: () => {
+        this.loadPosts();
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to unlock post');
+      }
+    });
+  }
+  deletePost(post: AdminPost): void {
+    if (!confirm(`Delete post "${post.title}"? This action cannot be undone.`)) return;
+    this.adminService.deletePost(post.id).subscribe({
+      next: () => {
+        this.loadPosts();
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to delete post');
+      }
+    });
+  }
+  restorePost(post: AdminPost): void {
+    if (!confirm(`Restore post "${post.title}"?`)) return;
+    this.adminService.restorePost(post.id).subscribe({
+      next: () => {
+        this.loadPosts();
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to restore post');
+      }
+    });
+  }
+  getStatusClass(post: AdminPost): string {
+    if (post.is_deleted) return 'status-deleted';
+    if (post.is_locked) return 'status-locked';
+    return 'status-active';
+  }
+  getStatusText(post: AdminPost): string {
+    if (post.is_deleted) return 'Deleted';
+    if (post.is_locked) return 'Locked';
+    return 'Active';
+  }
+  formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+}
+FILE: src/app/features/admin/admin-users/admin-users.css
+.admin-users {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.back-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+.back-link:hover {
+  color: var(--primary-orange);
+}
+.filters-section {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+.search-box input {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+.search-box .material-icons {
+  color: var(--text-secondary);
+}
+.filters-section select {
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+}
+.clear-btn {
+  padding: 8px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.clear-btn:hover {
+  background: var(--bg-hover);
+}
+.users-table-container {
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+}
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.users-table th,
+.users-table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-primary);
+}
+.users-table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.users-table tr:hover {
+  background: var(--bg-hover);
+}
+.users-table tr.banned {
+  opacity: 0.7;
+}
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.username {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.role-badge,
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.badge-admin {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.badge-mod {
+  background: rgba(168, 85, 247, 0.2);
+  color: #a855f7;
+}
+.badge-user {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+.status-badge.banned {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.status-badge.inactive {
+  background: rgba(156, 163, 175, 0.2);
+  color: #9ca3af;
+}
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+.action-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.action-btn.ban:hover:not(:disabled) {
+  color: #f59e0b;
+}
+.action-btn.unban:hover:not(:disabled) {
+  color: #22c55e;
+}
+.action-btn.delete:hover:not(:disabled) {
+  color: #ef4444;
+}
+.empty-message {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 40px !important;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+.pagination button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.pagination button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pagination span {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.modal-body {
+  padding: 20px;
+}
+.modal-body p {
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.form-group textarea,
+.form-group select {
+  padding: 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: vertical;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-primary);
+}
+.btn-cancel,
+.btn-primary,
+.btn-danger {
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+.btn-cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+.btn-primary {
+  background: var(--primary-orange);
+  color: white;
+}
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+FILE: src/app/features/admin/admin-users/admin-users.html
+<div class="admin-users">
+  <div class="page-header">
+    <h1>User Management</h1>
+    <a routerLink="/admin" class="back-link">
+      <span class="material-icons">arrow_back</span>
+      Back to Dashboard
+    </a>
+  </div>
+
+
+  <div class="filters-section">
+    <div class="search-box">
+      <span class="material-icons">search</span>
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        placeholder="Search users..."
+        (keyup.enter)="applyFilters()"
+      />
+    </div>
+
+    <select [(ngModel)]="roleFilter" (change)="applyFilters()">
+      <option value="">All Roles</option>
+      <option value="admin">Admin</option>
+      <option value="moderator">Moderator</option>
+      <option value="user">User</option>
+    </select>
+
+    <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="banned">Banned</option>
+      <option value="inactive">Inactive</option>
+    </select>
+
+    <button class="clear-btn" (click)="clearFilters()">Clear</button>
+  </div>
+
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else {
+    <div class="users-table-container">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Joined</th>
+            <th>Posts</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+            <tr [class.banned]="user.isBanned">
+              <td class="user-cell">
+                <app-user-avatar
+                  [size]="32"
+                  [username]="user.username"
+                  [imageUrl]="user.avatarUrl ?? ''"
+                ></app-user-avatar>
+                <span class="username">{{ user.username }}</span>
+              </td>
+              <td>{{ user.email }}</td>
+              <td>
+                <span class="role-badge" [class]="getRoleBadgeClass(user.role)">
+                  {{ user.role }}
+                </span>
+              </td>
+              <td>
+                @if (user.isBanned) {
+                  <span class="status-badge banned">Banned</span>
+                } @else if (user.isActive) {
+                  <span class="status-badge active">Active</span>
+                } @else {
+                  <span class="status-badge inactive">Inactive</span>
+                }
+              </td>
+              <td>{{ formatDate(user.createdAt) }}</td>
+              <td>{{ user.postCount }}</td>
+              <td class="actions-cell">
+                <button
+                  class="action-btn"
+                  title="Change Role"
+                  (click)="openRoleModal(user)"
+                  [disabled]="user.role === 'admin'"
+                >
+                  <span class="material-icons">admin_panel_settings</span>
+                </button>
+
+                @if (user.isBanned) {
+                  <button
+                    class="action-btn unban"
+                    title="Unban User"
+                    (click)="unbanUser(user)"
+                  >
+                    <span class="material-icons">lock_open</span>
+                  </button>
+                } @else {
+                  <button
+                    class="action-btn ban"
+                    title="Ban User"
+                    (click)="openBanModal(user)"
+                    [disabled]="user.role === 'admin'"
+                  >
+                    <span class="material-icons">block</span>
+                  </button>
+                }
+
+                <button
+                  class="action-btn delete"
+                  title="Delete User"
+                  (click)="deleteUser(user)"
+                  [disabled]="user.role === 'admin'"
+                >
+                  <span class="material-icons">delete</span>
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-message">No users found</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+
+    <div class="pagination">
+      <button (click)="prevPage()" [disabled]="currentPage() === 1">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <span>Page {{ currentPage() }} of {{ Math.ceil(total() / pageSize) || 1 }}</span>
+      <button (click)="nextPage()" [disabled]="currentPage() * pageSize >= total()">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  }
+
+
+  @if (showBanModal()) {
+    <div class="modal-overlay" (click)="closeBanModal()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Ban User</h2>
+          <button class="close-btn" (click)="closeBanModal()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to ban <strong>{{ selectedUser()?.username }}</strong>?</p>
+          <div class="form-group">
+            <label>Reason (optional)</label>
+            <textarea
+              [(ngModel)]="banReason"
+              placeholder="Enter ban reason..."
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="closeBanModal()">Cancel</button>
+          <button class="btn-danger" (click)="confirmBan()">Ban User</button>
+        </div>
+      </div>
+    </div>
+  }
+
+
+  @if (showRoleModal()) {
+    <div class="modal-overlay" (click)="closeRoleModal()">
+      <div class="modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Change Role</h2>
+          <button class="close-btn" (click)="closeRoleModal()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Change role for <strong>{{ selectedUser()?.username }}</strong></p>
+          <div class="form-group">
+            <label>New Role</label>
+            <select [(ngModel)]="newRole">
+              <option value="user">User</option>
+              <option value="moderator">Moderator</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="closeRoleModal()">Cancel</button>
+          <button class="btn-primary" (click)="confirmRoleChange()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
+FILE: src/app/features/admin/admin-users/admin-users.ts
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink, ActivatedRoute } from '@angular/router';
+import { AdminService } from '../../../core/services/admin';
+interface AdminUser {
+  id: number;
+  username: string;
+  email: string;
+  avatar_url: string | null;
+  role: string;
+  is_active: boolean;
+  is_banned: boolean;
+  created_at: string;
+  post_count: number;
+  comment_count: number;
+}
+@Component({
+  selector: 'app-admin-users',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterLink],
+  templateUrl: './admin-users.html',
+  styleUrls: ['./admin-users.scss']
+})
+export class AdminUsers implements OnInit {
+  private adminService = inject(AdminService);
+  private route = inject(ActivatedRoute);
+  users = signal<AdminUser[]>([]);
+  total = signal(0);
+  currentPage = signal(1);
+  pageSize = 20;
+  loading = signal(false);
+  error = signal<string | null>(null);
+  successMessage = signal<string | null>(null);
+  searchQuery = signal('');
+  roleFilter = signal<string>('all');
+  statusFilter = signal<string>('all');
+  sortBy = signal('created_at');
+  sortOrder = signal<'asc' | 'desc'>('desc');
+  totalPages = computed(() => Math.ceil(this.total() / this.pageSize) || 1);
+  hasMore = computed(() => this.currentPage() * this.pageSize < this.total());
+  hasPrevious = computed(() => this.currentPage() > 1);
+  showBanModal = signal(false);
+  showRoleModal = signal(false);
+  selectedUser = signal<AdminUser | null>(null);
+  banReason = signal('');
+  newRole = signal('user');
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      if (params['search']) {
+        this.searchQuery.set(params['search']);
+      }
+      this.loadUsers();
+    });
+  }
+  loadUsers(): void {
+    this.loading.set(true);
+    this.error.set(null);
+    const params = {
+      page: this.currentPage(),
+      page_size: this.pageSize,
+      search: this.searchQuery() || undefined,
+      role: this.roleFilter() !== 'all' ? this.roleFilter() : undefined,
+      status: this.statusFilter() !== 'all' ? this.statusFilter() : undefined,
+      sort_by: this.sortBy(),
+      sort_order: this.sortOrder()
+    };
+    this.adminService.getUsers(params).subscribe({
+      next: (response: any) => {
+        const users = response.items || response.users || [];
+        this.users.set(users);
+        this.total.set(response.total || 0);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to load users');
+        this.loading.set(false);
+      }
+    });
+  }
+  onSearch(): void {
+    this.currentPage.set(1);
+    this.loadUsers();
+  }
+  onFilterChange(): void {
+    this.currentPage.set(1);
+    this.loadUsers();
+  }
+  nextPage(): void {
+    if (this.hasMore()) {
+      this.currentPage.update(p => p + 1);
+      this.loadUsers();
+    }
+  }
+  previousPage(): void {
+    if (this.hasPrevious()) {
+      this.currentPage.update(p => p - 1);
+      this.loadUsers();
+    }
+  }
+  openBanModal(user: AdminUser): void {
+    this.selectedUser.set(user);
+    this.banReason.set('');
+    this.showBanModal.set(true);
+  }
+  closeBanModal(): void {
+    this.showBanModal.set(false);
+    this.selectedUser.set(null);
+    this.banReason.set('');
+  }
+  banUser(): void {
+    const user = this.selectedUser();
+    if (!user) return;
+    this.adminService.banUser(user.id, this.banReason()).subscribe({
+      next: (response) => {
+        this.successMessage.set(response.message);
+        this.closeBanModal();
+        this.loadUsers();
+        setTimeout(() => this.successMessage.set(null), 3000);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to ban user');
+      }
+    });
+  }
+  unbanUser(user: AdminUser): void {
+    if (!confirm(`Unban user "${user.username}"?`)) return;
+    this.adminService.unbanUser(user.id).subscribe({
+      next: (response) => {
+        this.successMessage.set(response.message);
+        this.loadUsers();
+        setTimeout(() => this.successMessage.set(null), 3000);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to unban user');
+      }
+    });
+  }
+  openRoleModal(user: AdminUser): void {
+    this.selectedUser.set(user);
+    this.newRole.set(user.role);
+    this.showRoleModal.set(true);
+  }
+  closeRoleModal(): void {
+    this.showRoleModal.set(false);
+    this.selectedUser.set(null);
+  }
+  changeRole(): void {
+    const user = this.selectedUser();
+    if (!user) return;
+    this.adminService.changeUserRole(user.id, this.newRole()).subscribe({
+      next: (response: any) => {
+        const message = response?.message || response?.detail || `Role changed to ${this.newRole()} successfully`;
+        this.successMessage.set(message);
+        this.closeRoleModal();
+        this.loadUsers();
+        setTimeout(() => this.successMessage.set(null), 3000);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to change role');
+      }
+    });
+  }
+  deleteUser(user: AdminUser): void {
+    if (!confirm(`Delete user "${user.username}"? This will also delete all their posts and comments.`)) return;
+    this.adminService.deleteUser(user.id).subscribe({
+      next: (response) => {
+        this.successMessage.set(response.message);
+        this.loadUsers();
+        setTimeout(() => this.successMessage.set(null), 3000);
+      },
+      error: (err) => {
+        this.error.set(err.error?.detail || 'Failed to delete user');
+      }
+    });
+  }
+  getRoleClass(role: string): string {
+    switch (role) {
+      case 'admin': return 'role-admin';
+      case 'moderator': return 'role-moderator';
+      default: return 'role-user';
+    }
+  }
+  getStatusClass(user: AdminUser): string {
+    if (user.is_banned) return 'status-banned';
+    if (!user.is_active) return 'status-inactive';
+    return 'status-active';
+  }
+  getStatusText(user: AdminUser): string {
+    if (user.is_banned) return 'Banned';
+    if (!user.is_active) return 'Inactive';
+    return 'Active';
+  }
+  formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+  getAvatarUrl(user: AdminUser): string {
+    return user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`;
   }
 }
 FILE: src/app/features/auth/login/login.css
@@ -1284,6 +4407,238 @@ export class Login {
   }
 }
 FILE: src/app/features/auth/signup/signup.css
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+}
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  padding: 32px;
+}
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.logo-icon {
+  font-size: 32px;
+}
+.logo h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary-orange);
+  margin: 0;
+}
+.auth-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-input {
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+.form-input:focus {
+  border-color: var(--primary-orange);
+  background-color: var(--bg-primary);
+}
+.form-input.error {
+  border-color: var(--error);
+}
+.password-input-wrapper {
+  position: relative;
+}
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+}
+.password-toggle:hover {
+  color: var(--text-primary);
+}
+.error-message {
+  font-size: 12px;
+  color: var(--error);
+  margin-top: 4px;
+}
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary-orange);
+}
+.forgot-link {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-size: 14px;
+}
+.forgot-link:hover {
+  text-decoration: underline;
+}
+.alert {
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.alert-error {
+  background-color: rgba(234, 0, 39, 0.1);
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+.submit-btn {
+  padding: 14px;
+  background-color: var(--primary-orange);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover:not(:disabled) {
+  background-color: var(--primary-orange-light);
+}
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 20px 0;
+}
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--border-primary);
+}
+.divider span {
+  position: relative;
+  padding: 0 16px;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.oauth-btn {
+  padding: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.oauth-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-secondary);
+}
+.oauth-btn img {
+  width: 20px;
+  height: 20px;
+}
+.auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-primary);
+}
+.auth-footer p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.auth-footer a {
+  color: var(--primary-orange);
+  text-decoration: none;
+  font-weight: 500;
+}
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 .password-strength {
   margin-top: 8px;
   display: flex;
@@ -1387,9 +4742,9 @@ FILE: src/app/features/auth/signup/signup.html
             <div
               class="strength-fill"
               [style.width.%]="passwordStrength()"
-              [class.weak]="passwordStrength() <= 33"
-              [class.medium]="passwordStrength() > 33 && passwordStrength() <= 66"
-              [class.strong]="passwordStrength() > 66"
+              [class.weak]="passwordStrength() <= 10"
+              [class.medium]="passwordStrength() > 10 && passwordStrength() <= 15"
+              [class.strong]="passwordStrength() > 18"
             ></div>
           </div>
           <span class="strength-text">{{ getPasswordStrengthText() }}</span>
@@ -1414,7 +4769,7 @@ FILE: src/app/features/auth/signup/signup.html
       <div class="form-options">
         <label class="checkbox-label">
           <input type="checkbox" formControlName="agreeToTerms">
-          <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a></span>
+          <span>I agree to the <a href="/terms" target="https://github.com/sunilkumarpradhan">Terms of Service</a></span>
         </label>
       </div>
 
@@ -2602,9 +5957,10 @@ FILE: src/app/features/posts/post-card/post-card.html
 <article class="post-card" (click)="navigateToPost()">
   <div class="post-votes">
     <app-vote-buttons
-      [upvotes]="post().upvotes"
-      [downvotes]="post().downvotes"
-      [userVote]="post().userVote"
+      [upvotes]="currentUpvotes()"
+      [downvotes]="currentDownvotes()"
+      [userVote]="currentUserVote()"
+      [disabled]="isVotePending()"
       (vote)="handleVote($event)"
     ></app-vote-buttons>
   </div>
@@ -2657,7 +6013,7 @@ FILE: src/app/features/posts/post-card/post-card.html
   </div>
 </article>
 FILE: src/app/features/posts/post-card/post-card.ts
-import { ChangeDetectionStrategy, Component, inject, input, signal, effect } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { VoteButtons } from '../../../shared/components/vote-buttons/vote-buttons';
@@ -2665,6 +6021,7 @@ import { UserAvatar } from '../../../shared/components/user-avatar/user-avatar';
 import { Post } from '../../../core/models/post.model';
 import { PostService } from '../services/post';
 import { FavoriteState } from '../../../core/services/favorite';
+import { VoteState } from '../../../core/services/vote-state';
 @Component({
   selector: 'app-post-card',
   standalone: true,
@@ -2677,8 +6034,24 @@ export class PostCard {
   private readonly router = inject(Router);
   private readonly postService = inject(PostService);
   private readonly favoriteState = inject(FavoriteState);
+  private readonly voteState = inject(VoteState);
   post = input.required<Post>();
   isFavorite = signal(false);
+  readonly currentUpvotes = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.upvotes ?? this.post().upvotes;
+  });
+  readonly currentDownvotes = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.downvotes ?? this.post().downvotes;
+  });
+  readonly currentUserVote = computed(() => {
+    const voteCache = this.voteState.getPostVote(this.post().id);
+    return voteCache?.userVote ?? this.post().userVote;
+  });
+  readonly isVotePending = computed(() => {
+    return this.voteState.isPending('post', this.post().id);
+  });
   constructor() {
     effect(() => {
       this.isFavorite.set(this.post().isFavorited);
@@ -2688,36 +6061,21 @@ export class PostCard {
     this.router.navigate(['/post', this.post().id]);
   }
   handleVote(vote: 'up' | 'down') {
-    const currentPost = this.post();
-    const currentVote = currentPost.userVote;
+    if (this.isVotePending()) return;
+    const currentVote = this.currentUserVote();
     if (currentVote === vote) {
-      this.postService.removeVote(currentPost.id).subscribe({
-        next: () => {
-          if (vote === 'up') {
-            currentPost.upvotes--;
-          } else {
-            currentPost.downvotes--;
-          }
-          currentPost.userVote = null;
+      this.postService.removeVote(this.post().id, currentVote).subscribe({
+        error: (err) => {
+          console.error('Failed to remove vote', err);
+          this.voteState.optimisticVote('post', this.post().id, currentVote, null);
         },
-        error: (err) => console.error('Failed to remove vote', err),
       });
     } else {
-      this.postService.vote(currentPost.id, vote).subscribe({
-        next: () => {
-          if (currentVote === 'up') {
-            currentPost.upvotes--;
-          } else if (currentVote === 'down') {
-            currentPost.downvotes--;
-          }
-          if (vote === 'up') {
-            currentPost.upvotes++;
-          } else {
-            currentPost.downvotes++;
-          }
-          currentPost.userVote = vote;
+      this.postService.vote(this.post().id, vote, currentVote).subscribe({
+        error: (err) => {
+          console.error('Failed to vote', err);
+          this.voteState.optimisticVote('post', this.post().id, currentVote, vote);
         },
-        error: (err) => console.error('Failed to vote', err),
       });
     }
   }
@@ -3601,21 +6959,21 @@ export class PostDetail implements OnInit {
     };
   }
   handlePostVote(vote: 'up' | 'down') {
-    const currentPost = this.post();
-    if (!currentPost) return;
-    const currentVote = currentPost.userVote;
-    if (currentVote === vote) {
-      this.postService.removeVote(currentPost.id).subscribe({
-        next: () => this.loadPost(currentPost.id),
-        error: (err) => console.error('Failed to remove vote', err),
-      });
-    } else {
-      this.postService.vote(currentPost.id, vote).subscribe({
-        next: () => this.loadPost(currentPost.id),
-        error: (err) => console.error('Failed to vote', err),
-      });
-    }
+  const currentPost = this.post();
+  if (!currentPost) return;
+  const currentVote = currentPost.userVote;
+  if (currentVote === vote) {
+    this.postService.removeVote(currentPost.id, currentVote).subscribe({
+      next: () => this.loadPost(currentPost.id),
+      error: (err) => console.error('Failed to remove vote', err),
+    });
+  } else {
+    this.postService.vote(currentPost.id, vote, currentVote).subscribe({
+      next: () => this.loadPost(currentPost.id),
+      error: (err) => console.error('Failed to vote', err),
+    });
   }
+}
   toggleFavorite() {
     const currentPost = this.post();
     if (!currentPost) return;
@@ -3760,8 +7118,10 @@ FILE: src/app/features/posts/services/post.ts
 import { inject, Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '../../../core/config/environment';
-import { map } from 'rxjs';
+import { map, tap } from 'rxjs';
 import { Post, PostList } from '../../../core/models/post.model';
+import { VoteState } from '../../../core/services/vote-state';
+import { Websocket } from '../../../core/services/websocket';
 interface PostDto {
   id: number;
   user_id: number;
@@ -3795,6 +7155,8 @@ interface CreatePostDto {
 @Injectable({ providedIn: 'root' })
 export class PostService {
   private readonly http = inject(HttpClient);
+  private readonly voteState = inject(VoteState);
+  private readonly websocket = inject(Websocket);
   list(options: { page?: number; sortBy?: 'new' | 'hot' | 'top'; tag?: string | null } = {}) {
     const params = new HttpParams({
       fromObject: {
@@ -3827,13 +7189,33 @@ export class PostService {
   delete(postId: number) {
     return this.http.delete(`${environment.apiUrl}/posts/${postId}`);
   }
-  vote(postId: number, voteType: 'up' | 'down') {
-    return this.http.post(`${environment.apiUrl}/posts/${postId}/vote`, {
+  vote(postId: number, voteType: 'up' | 'down', currentVote: 'up' | 'down' | null) {
+    this.voteState.optimisticVote('post', postId, voteType, currentVote);
+    this.voteState.setPending('post', postId, true);
+    return this.http.post<{
+      upvotes: number;
+      downvotes: number;
+      user_vote: 'up' | 'down' | null;
+    }>(`${environment.apiUrl}/posts/${postId}/vote`, {
       vote_type: voteType,
-    });
+    }).pipe(
+      tap(response => {
+        this.voteState.setPending('post', postId, false);
+      })
+    );
   }
-  removeVote(postId: number) {
-    return this.http.delete(`${environment.apiUrl}/posts/${postId}/vote`);
+  removeVote(postId: number, currentVote: 'up' | 'down' | null) {
+    this.voteState.optimisticVote('post', postId, null, currentVote);
+    this.voteState.setPending('post', postId, true);
+    return this.http.delete<{
+      upvotes: number;
+      downvotes: number;
+      user_vote: null;
+    }>(`${environment.apiUrl}/posts/${postId}/vote`).pipe(
+      tap(response => {
+        this.voteState.setPending('post', postId, false);
+      })
+    );
   }
   favorite(postId: number) {
     return this.http.post(`${environment.apiUrl}/posts/${postId}/favorite`, {});
@@ -5014,6 +8396,38 @@ FILE: src/app/shared/components/sidebar/sidebar.html
       }
     </div>
 
+
+
+@if (auth.isAuthenticated()) {
+  @if (isAdmin() || isModerator()) {
+    <div class="nav-section">
+      <h3 class="nav-section-title">Moderation</h3>
+
+      @if (isAdmin()) {
+        <a routerLink="/admin" routerLinkActive="active" class="nav-item">
+          <span class="material-icons">admin_panel_settings</span>
+          <span>Admin Dashboard</span>
+        </a>
+      }
+
+      <a routerLink="/admin/users" routerLinkActive="active" class="nav-item" *ngIf="isAdmin()">
+        <span class="material-icons">manage_accounts</span>
+        <span>Manage Users</span>
+      </a>
+
+      <a [routerLink]="isAdmin() ? '/admin/posts' : '/mod/posts'" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">article</span>
+        <span>Manage Posts</span>
+      </a>
+
+      <a [routerLink]="isAdmin() ? '/admin/comments' : '/mod/comments'" routerLinkActive="active" class="nav-item">
+        <span class="material-icons">comment</span>
+        <span>Manage Comments</span>
+      </a>
+    </div>
+  }
+}
+
     <div class="nav-section">
       <h3 class="section-title">CATEGORIES</h3>
       @for (category of categories(); track category.id) {
@@ -5051,6 +8465,14 @@ export class Sidebar {
   readonly categories = signal(CATEGORIES);
   readonly isAuthenticated = this.auth.isAuthenticated;
   readonly isCollapsed = signal(false);
+  isAdmin(): boolean {
+    const user = this.auth.user();
+    return user?.role === 'admin';
+  }
+  isModerator(): boolean {
+    const user = this.auth.user();
+    return user?.role === 'admin' || user?.role === 'moderator';
+  }
 }
 FILE: src/app/shared/components/user-avatar/user-avatar.css
 .avatar {
@@ -5182,6 +8604,24 @@ FILE: src/app/shared/components/vote-buttons/vote-buttons.css
   align-items: center;
   justify-content: center;
 }
+.vote-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.vote-btn:disabled {
+  cursor: not-allowed;
+}
+.vote-count.loading {
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
 .vote-btn:hover {
   background-color: var(--bg-hover);
 }
@@ -5219,19 +8659,26 @@ FILE: src/app/shared/components/vote-buttons/vote-buttons.html
   <button
     class="vote-btn upvote"
     [class.active]="userVote() === 'up'"
+    [class.disabled]="disabled()"
+    [disabled]="disabled()"
     (click)="handleVote($event, 'up')"
     [attr.aria-label]="'Upvote'"
   >
     <span class="material-icons">arrow_upward</span>
   </button>
 
-  <span class="vote-count" [class.upvoted]="userVote() === 'up'" [class.downvoted]="userVote() === 'down'">
+  <span class="vote-count"
+    [class.upvoted]="userVote() === 'up'"
+    [class.downvoted]="userVote() === 'down'"
+    [class.loading]="disabled()">
     {{ formatVoteCount(voteCount()) }}
   </span>
 
   <button
     class="vote-btn downvote"
     [class.active]="userVote() === 'down'"
+    [class.disabled]="disabled()"
+    [disabled]="disabled()"
     (click)="handleVote($event, 'down')"
     [attr.aria-label]="'Downvote'"
   >
@@ -5253,6 +8700,7 @@ export class VoteButtons {
   downvotes = input.required<number>();
   userVote = input<'up' | 'down' | null>(null);
   orientation = input<'vertical' | 'horizontal'>('vertical');
+  disabled = input<boolean>(false);
   vote = output<'up' | 'down'>();
   voteCount = computed(() => {
     return this.upvotes() - this.downvotes();
@@ -5260,7 +8708,9 @@ export class VoteButtons {
   handleVote(event: Event, voteType: 'up' | 'down') {
     event.stopPropagation();
     event.preventDefault();
-    this.vote.emit(voteType);
+    if (!this.disabled()) {
+      this.vote.emit(voteType);
+    }
   }
   formatVoteCount(count: number): string {
     if (count >= 1000000) {
@@ -5440,14 +8890,15 @@ FILE: tsconfig.spec.json
   ]
 }
 SUMMARY
-Total files: 109
-Original size: 146,840 chars
-Processed size: 143,594 chars
-Reduction: 2.2%
+Total files: 126
+Original size: 241,226 chars
+Processed size: 234,006 chars
+Reduction: 3.0%
 
 File types:
- .ts: 53
- .css: 26
- .html: 26
+ .ts: 61
+ .css: 30
+ .html: 30
  .json: 3
+ [no extension]: 1
  .scss: 1

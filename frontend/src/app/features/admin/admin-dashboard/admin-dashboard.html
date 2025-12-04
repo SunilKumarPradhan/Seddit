@@ -1,0 +1,117 @@
+<div class="admin-dashboard">
+  <div class="dashboard-header">
+    <h1>Admin Dashboard</h1>
+    <button class="refresh-btn" (click)="loadDashboard()" [disabled]="isLoading()">
+      <span class="material-icons">refresh</span>
+    </button>
+  </div>
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else if (error()) {
+    <div class="error-message">
+      <span class="material-icons">error</span>
+      <p>{{ error() }}</p>
+      <button (click)="loadDashboard()">Retry</button>
+    </div>
+  } @else if (stats(); as stats) {
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon users">
+          <span class="material-icons">people</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalUsers }}</span>
+          <span class="stat-label">Total Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon active">
+          <span class="material-icons">check_circle</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.activeUsers }}</span>
+          <span class="stat-label">Active Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon banned">
+          <span class="material-icons">block</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.bannedUsers }}</span>
+          <span class="stat-label">Banned Users</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon posts">
+          <span class="material-icons">article</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalPosts }}</span>
+          <span class="stat-label">Total Posts</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon comments">
+          <span class="material-icons">comment</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.totalComments }}</span>
+          <span class="stat-label">Total Comments</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon today">
+          <span class="material-icons">today</span>
+        </div>
+        <div class="stat-content">
+          <span class="stat-value">{{ stats.postsToday }}</span>
+          <span class="stat-label">Posts Today</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-sections">
+      <div class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+          <a routerLink="/admin/users" class="action-btn">
+            <span class="material-icons">manage_accounts</span>
+            <span>Manage Users</span>
+          </a>
+          <a routerLink="/admin/posts" class="action-btn">
+            <span class="material-icons">article</span>
+            <span>Manage Posts</span>
+          </a>
+          <a routerLink="/admin/comments" class="action-btn">
+            <span class="material-icons">comment</span>
+            <span>Manage Comments</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="recent-activity">
+        <h2>Recent Activity</h2>
+        <div class="activity-list">
+          @for (activity of recentActivity(); track activity.timestamp) {
+            <div class="activity-item">
+              <span class="material-icons activity-icon">{{ getActivityIcon(activity.type) }}</span>
+              <div class="activity-content">
+                <p>{{ activity.message }}</p>
+                <span class="activity-time">{{ formatTime(activity.timestamp) }}</span>
+              </div>
+            </div>
+          } @empty {
+            <p class="no-activity">No recent activity</p>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

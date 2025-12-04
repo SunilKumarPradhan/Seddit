@@ -1,0 +1,186 @@
+<div class="admin-users">
+  <div class="admin-header">
+    <h1>User Management</h1>
+    <p>Manage user accounts, roles, and permissions</p>
+  </div>
+
+  <div class="filters-section">
+    <input
+      type="text"
+      placeholder="Search by username or email..."
+      [(ngModel)]="searchQuery"
+      (keyup.enter)="applyFilters()"
+      class="search-input"
+    />
+    <select [(ngModel)]="roleFilter" (change)="applyFilters()">
+      <option value="">All Roles</option>
+      <option value="user">User</option>
+      <option value="moderator">Moderator</option>
+      <option value="admin">Admin</option>
+    </select>
+    <select [(ngModel)]="statusFilter" (change)="applyFilters()">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="banned">Banned</option>
+      <option value="inactive">Inactive</option>
+    </select>
+    <button class="apply-btn" (click)="applyFilters()">Apply</button>
+    <button class="clear-btn" (click)="clearFilters()">Clear</button>
+  </div>
+
+  @if (isLoading()) {
+    <app-loading-spinner></app-loading-spinner>
+  } @else {
+    <div class="users-table-container">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Joined</th>
+            <th>Posts</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of users(); track user.id) {
+            <tr [class.banned]="user.isBanned">
+              <td class="user-cell">
+                <app-user-avatar
+                  [size]="32"
+                  [username]="user.username"
+                  [imageUrl]="user.avatarUrl ?? ''"
+                ></app-user-avatar>
+                <span class="username">{{ user.username }}</span>
+              </td>
+              <td>{{ user.email }}</td>
+              <td>
+                <span class="role-badge" [class]="getRoleBadgeClass(user.role)">
+                  {{ user.role }}
+                </span>
+              </td>
+              <td>
+                @if (user.isBanned) {
+                  <span class="status-badge banned">Banned</span>
+                } @else if (user.isActive) {
+                  <span class="status-badge active">Active</span>
+                } @else {
+                  <span class="status-badge inactive">Inactive</span>
+                }
+              </td>
+              <td>{{ formatDate(user.createdAt) }}</td>
+              <td>{{ user.postCount }}</td>
+              <td class="actions-cell">
+                <button
+                  class="action-btn"
+                  title="Change Role"
+                  (click)="openRoleModal(user)"
+                >
+                  <span class="material-icons">admin_panel_settings</span>
+                </button>
+                @if (user.isBanned) {
+                  <button
+                    class="action-btn success"
+                    title="Unban User"
+                    (click)="unbanUser(user)"
+                  >
+                    <span class="material-icons">lock_open</span>
+                  </button>
+                } @else {
+                  <button
+                    class="action-btn warning"
+                    title="Ban User"
+                    (click)="openBanModal(user)"
+                  >
+                    <span class="material-icons">block</span>
+                  </button>
+                }
+                <button
+                  class="action-btn danger"
+                  title="Delete User"
+                  (click)="deleteUser(user)"
+                >
+                  <span class="material-icons">delete</span>
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="7" class="empty-state">
+                <span class="material-icons">person_search</span>
+                <p>No users found</p>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button (click)="prevPage()" [disabled]="currentPage() === 1">
+        <span class="material-icons">chevron_left</span>
+      </button>
+      <span class="page-info">Page {{ currentPage() }} of {{ getTotalPages() }}</span>
+      <button (click)="nextPage()" [disabled]="currentPage() >= getTotalPages()">
+        <span class="material-icons">chevron_right</span>
+      </button>
+    </div>
+  }
+
+  <!-- Ban Modal -->
+  @if (showBanModal()) {
+    <div class="modal-overlay" (click)="closeBanModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Ban User</h2>
+          <button class="close-btn" (click)="closeBanModal()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to ban <strong>{{ selectedUser()?.username }}</strong>?</p>
+          <label for="banReason">Reason (optional):</label>
+          <textarea
+            id="banReason"
+            [(ngModel)]="banReason"
+            placeholder="Enter reason for ban..."
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeBanModal()">Cancel</button>
+          <button class="btn-danger" (click)="confirmBan()">Ban User</button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Role Change Modal -->
+  @if (showRoleModal()) {
+    <div class="modal-overlay" (click)="closeRoleModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Change User Role</h2>
+          <button class="close-btn" (click)="closeRoleModal()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>Change role for <strong>{{ selectedUser()?.username }}</strong></p>
+          <label for="newRole">New Role:</label>
+          <select id="newRole" [(ngModel)]="newRole">
+            <option value="user">User</option>
+            <option value="moderator">Moderator</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeRoleModal()">Cancel</button>
+          <button class="btn-primary" (click)="confirmRoleChange()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -4,22 +4,22 @@ from alembic import context
 import sys
 from pathlib import Path
 
-# Add app directory to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import settings
+from app.config import settings # get env based settings
 from app.database import Base
-from app.models import user, role, post, comment, notification  # Import all models
+from app.models import user, role, post, comment, notification 
+
 
 # Alembic Config object
 config = context.config
 
-# Set database URL from settings
+# Injects DATABASE_URL into Alembic's config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name) #A Python standard library function that reads logging configuration from an INI file
 
 # Target metadata for migrations
 target_metadata = Base.metadata

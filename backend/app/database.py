@@ -25,14 +25,9 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session, None,None]:
     """
     Dependency function to get database session.
-    
-    Usage in FastAPI:
-        @router.get("/items")
-        def get_items(db: Session = Depends(get_db)):
-            ...
     """
     db = SessionLocal()
     try:

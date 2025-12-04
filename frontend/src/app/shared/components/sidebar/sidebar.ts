@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Auth } from '../../../core/services/auth';
@@ -13,9 +13,21 @@ import { CATEGORIES } from '../../../core/constants/categories';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Sidebar {
-  private readonly auth = inject(Auth);
+  readonly auth = inject(Auth);  // Changed from private to public
 
   readonly categories = signal(CATEGORIES);
   readonly isAuthenticated = this.auth.isAuthenticated;
   readonly isCollapsed = signal(false);
+
+  readonly user = computed(() => this.auth.user());
+
+  isAdmin(): boolean {
+    const user = this.auth.user();
+    return user?.role === 'admin';
+  }
+
+  isModerator(): boolean {
+    const user = this.auth.user();
+    return user?.role === 'admin' || user?.role === 'moderator';
+  }
 }

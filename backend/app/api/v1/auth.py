@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
+from sqlalchemy.orm import Session # for db session this is needed
 from app.database import get_db
 from app.schemas.auth import RegisterRequest, FirebaseTokenRequest, TokenResponse
 from app.services.auth_service import AuthService
@@ -16,7 +15,6 @@ async def register(
     register_data: RegisterRequest,
     db: Session = Depends(get_db),
 ):
-    """Register a new user after Firebase authentication."""
     auth_service = AuthService(db)
     return auth_service.register_user(register_data)
 
@@ -26,6 +24,5 @@ async def login(
     login_data: FirebaseTokenRequest,
     db: Session = Depends(get_db),
 ):
-    """Login user with Firebase ID token."""
     auth_service = AuthService(db)
     return auth_service.login_user(login_data.id_token)
