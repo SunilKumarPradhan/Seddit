@@ -57,7 +57,6 @@ DIRECTORY TREE
 │ │ 📁 utils/
 │ │ │ 📄 logger.py
 │ 📁 logs/
-│ 📁 tests/
 FILE CONTENTS
 FILE: .env.example
 # Application
@@ -3235,10 +3234,11 @@ Usage:
 Or with uvicorn directly:
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
-import uvicorn
 from fastapi import FastAPI
-from app.config import settings
+
 app = FastAPI()
+import uvicorn
+from app.config import settings
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -3322,8 +3322,8 @@ if __name__ == "__main__":
     main()
 SUMMARY
 Total files: 44
-Original size: 116,170 chars
-Processed size: 109,949 chars
+Original size: 116,171 chars
+Processed size: 109,950 chars
 Reduction: 5.4%
 
 File types:

@@ -29,7 +29,7 @@ def verify_firebase_id_token(id_token: str) -> Dict[str, Any]:
     """
     _initialize_firebase()
     try:
-        return firebase_auth.verify_id_token(id_token)
+        return firebase_auth.verify_id_token(id_token , clock_skew_seconds=10)
     except Exception as exc:  # noqa: BLE001
         app_logger.error(f"Firebase token verification failed: {exc}")
         raise ValueError("Invalid Firebase ID token") from exc
