@@ -13,17 +13,23 @@ export class VoteButtons {
   downvotes = input.required<number>();
   userVote = input<'up' | 'down' | null>(null);
   orientation = input<'vertical' | 'horizontal'>('vertical');
+  disabled = input<boolean>(false);
   
   vote = output<'up' | 'down'>();
-  
+
   voteCount = computed(() => {
     return this.upvotes() - this.downvotes();
   });
-  
-  handleVote(voteType: 'up' | 'down') {
-    this.vote.emit(voteType);
+
+  handleVote(event: Event, voteType: 'up' | 'down') {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    if (!this.disabled()) {
+      this.vote.emit(voteType);
+    }
   }
-  
+
   formatVoteCount(count: number): string {
     if (count >= 1000000) {
       return (count / 1000000).toFixed(1) + 'M';

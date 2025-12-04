@@ -1,51 +1,58 @@
 <article class="post-card" (click)="navigateToPost()">
   <div class="post-votes">
-    <app-vote-buttons 
-      [upvotes]="post().upvotes"
-      [downvotes]="post().downvotes"
-      [userVote]="userVote()"
+    <app-vote-buttons
+      [upvotes]="currentUpvotes()"
+      [downvotes]="currentDownvotes()"
+      [userVote]="currentUserVote()"
+      [disabled]="isVotePending()"
       (vote)="handleVote($event)"
     ></app-vote-buttons>
   </div>
-  
+
   <div class="post-content">
     <div class="post-header">
-      <app-user-avatar [size]="20"></app-user-avatar>
-      <span class="post-author">{{ post().author }}</span>
+      <app-user-avatar
+        [size]="20"
+        [username]="post().authorUsername"
+        [imageUrl]="post().authorAvatar ?? ''"
+      ></app-user-avatar>
+      <span class="post-author">{{ post().authorUsername }}</span>
       <span class="post-separator">•</span>
       <span class="post-time">{{ formatTime(post().createdAt) }}</span>
       @if (post().tag) {
-        <span class="post-tag">{{ post().tag }}</span>
+        <span class="post-tag">#{{ post().tag }}</span>
       }
     </div>
-    
+
     <h2 class="post-title">{{ post().title }}</h2>
-    
+
     @if (post().imageUrl) {
       <div class="post-image-container">
-        <img [src]="post().imageUrl" [alt]="post().title" class="post-image">
+        <img [src]="post().imageUrl" [alt]="post().title" class="post-image" />
       </div>
     }
-    
+
     @if (post().description) {
       <p class="post-description">{{ post().description }}</p>
     }
-    
+
     <div class="post-footer">
       <button class="post-action" (click)="openComments($event)">
         <span class="material-icons">comment</span>
         <span>{{ post().commentCount }} Comments</span>
       </button>
-      
+
       <button class="post-action" (click)="share($event)">
         <span class="material-icons">share</span>
         <span>Share</span>
       </button>
-      
+
       <button class="post-action" (click)="toggleFavorite($event)">
         <span class="material-icons">{{ isFavorite() ? 'bookmark' : 'bookmark_border' }}</span>
         <span>Save</span>
       </button>
+
+      <!-- ✅ REMOVED: Report button -->
     </div>
   </div>
 </article>

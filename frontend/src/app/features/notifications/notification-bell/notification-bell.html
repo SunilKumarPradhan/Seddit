@@ -1,17 +1,17 @@
 <div class="notification-bell-container">
-  <button 
-    class="notification-bell" 
+  <button
+    class="notification-bell"
     (click)="toggleNotifications()"
     [attr.aria-label]="'Notifications'"
   >
-    <span class="material-icons">{{ hasUnread() ? 'notifications_active' : 'notifications' }}</span>
+    <span class="material-icons">{{ unreadCount() > 0 ? 'notifications_active' : 'notifications' }}</span>
     @if (unreadCount() > 0) {
       <span class="notification-badge">{{ formatCount(unreadCount()) }}</span>
     }
   </button>
-  
+
   @if (isOpen()) {
-    <div class="notification-dropdown" (clickOutside)="close()">
+    <div class="notification-dropdown">
       <div class="notification-header">
         <h3>Notifications</h3>
         @if (unreadCount() > 0) {
@@ -20,11 +20,11 @@
           </button>
         }
       </div>
-      
+
       <div class="notification-list">
         @if (notifications().length > 0) {
           @for (notification of notifications(); track notification.id) {
-            <app-notification-item 
+            <app-notification-item
               [notification]="notification"
               (click)="handleNotificationClick(notification)"
             ></app-notification-item>
@@ -36,9 +36,9 @@
           </div>
         }
       </div>
-      
+
       <div class="notification-footer">
-        <a routerLink="/notifications" class="view-all">View all notifications</a>
+        <a routerLink="/notifications" class="view-all" (click)="close()">View all notifications</a>
       </div>
     </div>
   }

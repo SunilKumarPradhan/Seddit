@@ -9,7 +9,6 @@ from app.models.user import User
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
-
 @router.post("", response_model=PostResponse, status_code=201)
 async def create_post(
     post_data: PostCreate,
@@ -19,7 +18,6 @@ async def create_post(
     """Create a new post."""
     post_service = PostService(db)
     return post_service.create_post(post_data, current_user)
-
 
 @router.get("", response_model=PostListResponse)
 async def get_posts(
@@ -32,7 +30,7 @@ async def get_posts(
 ):
     """
     Get paginated list of posts.
-    
+
     - **page**: Page number (starts at 1)
     - **page_size**: Number of posts per page (max 100)
     - **tag**: Filter by tag
@@ -41,6 +39,16 @@ async def get_posts(
     post_service = PostService(db)
     return post_service.get_posts(page, page_size, tag, sort_by, current_user)
 
+@router.get("/favorites", response_model=PostListResponse)
+async def get_favorites(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's favorite posts."""
+    post_service = PostService(db)
+    return post_service.get_favorites(page, page_size, current_user)
 
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(
@@ -51,7 +59,6 @@ async def get_post(
     """Get a specific post by ID."""
     post_service = PostService(db)
     return post_service.get_post(post_id, current_user)
-
 
 @router.put("/{post_id}", response_model=PostResponse)
 async def update_post(
@@ -64,7 +71,6 @@ async def update_post(
     post_service = PostService(db)
     return post_service.update_post(post_id, post_data, current_user)
 
-
 @router.delete("/{post_id}")
 async def delete_post(
     post_id: int,
@@ -74,7 +80,6 @@ async def delete_post(
     """Delete a post."""
     post_service = PostService(db)
     return post_service.delete_post(post_id, current_user)
-
 
 @router.post("/{post_id}/vote", response_model=PostResponse)
 async def vote_post(
@@ -87,7 +92,6 @@ async def vote_post(
     post_service = PostService(db)
     return post_service.vote_post(post_id, vote_data, current_user)
 
-
 @router.delete("/{post_id}/vote", response_model=PostResponse)
 async def remove_vote(
     post_id: int,
@@ -98,17 +102,26 @@ async def remove_vote(
     post_service = PostService(db)
     return post_service.remove_vote(post_id, current_user)
 
-
+# ✅ FIXED: Split toggle into separate endpoints
 @router.post("/{post_id}/favorite")
-async def toggle_favorite(
+async def favorite_post(
     post_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Toggle favorite status of a post."""
+    """Add post to favorites."""
     post_service = PostService(db)
-    return post_service.toggle_favorite(post_id, current_user)
+    return post_service.add_favorite(post_id, current_user)
 
+@router.delete("/{post_id}/favorite")
+async def unfavorite_post(
+    post_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove post from favorites."""
+    post_service = PostService(db)
+    return post_service.remove_favorite(post_id, current_user)
 
 @router.get("/user/{user_id}", response_model=PostListResponse)
 async def get_user_posts(

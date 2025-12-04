@@ -27,8 +27,10 @@
       <label for="tag">Tag</label>
       <select id="tag" formControlName="tag" class="form-select">
         <option value="">Select a tag (optional)</option>
-        @for (tag of tags(); track tag) {
-          <option [value]="tag">{{ tag }}</option>
+        @for (category of tags(); track category.id) {
+          <option [value]="category.slug">
+            {{ category.emoji }} {{ category.name }}
+          </option>
         }
       </select>
     </div>

@@ -1,48 +1,52 @@
 <div class="comment-item" [style.margin-left.px]="depth() * 24">
-  <div class="comment-thread-line" *ngIf="depth() > 0"></div>
-  
+  @if (depth() > 0) {
+    <div class="comment-thread-line"></div>
+  }
+
   <div class="comment-content">
     <div class="comment-header">
-      <app-user-avatar [username]="comment().author" [size]="24"></app-user-avatar>
-      <a [routerLink]="['/profile', comment().author]" class="comment-author">
-        {{ comment().author }}
+      <app-user-avatar
+        [username]="comment().authorUsername"
+        [imageUrl]="comment().authorAvatar ?? ''"
+        [size]="24"
+      ></app-user-avatar>
+      <a [routerLink]="['/profile', comment().authorUsername]" class="comment-author">
+        {{ comment().authorUsername }}
       </a>
-      @if (comment().isOP) {
+      @if (comment().isOp) {
         <span class="op-badge">OP</span>
       }
       <span class="comment-time">{{ formatTime(comment().createdAt) }}</span>
     </div>
-    
+
     <div class="comment-body">
       {{ comment().content }}
     </div>
-    
+
     <div class="comment-footer">
       <app-vote-buttons
         [upvotes]="comment().upvotes"
         [downvotes]="comment().downvotes"
+        [userVote]="comment().userVote"
         [orientation]="'horizontal'"
         (vote)="onVoteClick($event)"
       ></app-vote-buttons>
-      
+
       <button class="comment-action" (click)="toggleReply()">
         <span class="material-icons">reply</span>
         <span>Reply</span>
       </button>
-      
+
       @if (canModerate()) {
         <button class="comment-action" (click)="deleteComment()">
           <span class="material-icons">delete</span>
           <span>Delete</span>
         </button>
       }
-      
-      <button class="comment-action" (click)="reportComment()">
-        <span class="material-icons">flag</span>
-        <span>Report</span>
-      </button>
+
+      <!-- ✅ REMOVED: Report button -->
     </div>
-    
+
     @if (showReplyForm()) {
       <div class="reply-form-container">
         <app-comment-form
@@ -52,8 +56,8 @@
         ></app-comment-form>
       </div>
     }
-    
-    @if (comment().replies && comment().replies.length > 0) {
+
+    @if (comment().replies.length > 0) {
       <div class="comment-replies">
         @for (reply of comment().replies; track reply.id) {
           <app-comment-item

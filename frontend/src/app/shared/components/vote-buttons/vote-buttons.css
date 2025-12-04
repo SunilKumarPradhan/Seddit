@@ -19,6 +19,28 @@
   justify-content: center;
 }
 
+.vote-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vote-btn:disabled {
+  cursor: not-allowed;
+}
+
+.vote-count.loading {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .vote-btn:hover {
   background-color: var(--bg-hover);
 }

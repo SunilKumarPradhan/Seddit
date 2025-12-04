@@ -1,20 +1,6 @@
 <div class="feed-container">
   <div class="feed-header">
-    <h1 class="feed-title">{{ getFeedTitle() }}</h1>
-    <div class="feed-filters">
-      <button class="filter-btn" [class.active]="currentFilter() === 'hot'" (click)="setFilter('hot')">
-        <span class="material-icons">whatshot</span>
-        Hot
-      </button>
-      <button class="filter-btn" [class.active]="currentFilter() === 'new'" (click)="setFilter('new')">
-        <span class="material-icons">new_releases</span>
-        New
-      </button>
-      <button class="filter-btn" [class.active]="currentFilter() === 'top'" (click)="setFilter('top')">
-        <span class="material-icons">trending_up</span>
-        Top
-      </button>
-    </div>
+    <h1 class="feed-title">{{ feedTitle() }}</h1>
   </div>
   
   <div class="posts-list">
