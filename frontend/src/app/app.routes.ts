@@ -7,7 +7,7 @@ import { PostCreate } from './features/posts/post-create/post-create';
 import { Profile } from './features/user/profile/profile';
 import { Settings } from './features/user/settings/settings';
 import { SavedPosts } from './pages/saved-posts/saved-posts';
-import { Category } from './pages/category/category'; // ✅ ADD THIS
+import { Category } from './pages/category/category';
 import { NotFound } from './pages/not-found/not-found';
 import { authGuard } from './core/guards/auth-guard';
 import { guestGuard } from './core/guards/guest-guard';
@@ -20,7 +20,7 @@ export const routes: Routes = [
   { path: 'post/:id', component: PostDetail, canActivate: [authGuard] },
   { path: 'create-post', component: PostCreate, canActivate: [authGuard] },
   { path: 'saved', component: SavedPosts, canActivate: [authGuard] },
-  { path: 'category/:slug', component: Category, canActivate: [authGuard] }, // ✅ ADD THIS
+  { path: 'category/:slug', component: Category, canActivate: [authGuard] },
   { path: 'profile/:username', component: Profile, canActivate: [authGuard] },
   { path: 'settings', component: Settings, canActivate: [authGuard] },
 

@@ -2,7 +2,7 @@ import os
 import re
 
 # Set your target directory here
-MAIN_PATH = r"backend"
+MAIN_PATH = r"frontend"
 
 # Folders to completely ignore
 IGNORE_FOLDERS = {
@@ -13,7 +13,7 @@ IGNORE_FOLDERS = {
 # Files to ignore by exact name
 IGNORE_FILES = {
     "curr_dir.txt", "package-lock.json", ".DS_Store", "thumbs.db",
-    ".editorconfig","package.json","angular.json", ".gitignore" ,"Dockerfile"
+    ".editorconfig","package.json","angular.json", ".gitignore"
 }
 
 # Extensions to ignore

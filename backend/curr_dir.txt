@@ -1,6 +1,7 @@
 DIRECTORY TREE
 📁 backend/
 │ 📄 .env.example
+│ 📄 Dockerfile
 │ ⚙️ firebase-service-account.json
 │ 📄 main.py
 │ 📄 seed.py
@@ -10,6 +11,7 @@ DIRECTORY TREE
 │ │ 📁 versions/
 │ │ │ 📄 20251130_allow_long_image_url.py
 │ │ │ 📄 382b9ef7d182_initial_schema.py
+│ │ │ 📄 a8007ce4c758_add_rbac_fields.py
 │ 📁 app/
 │ │ 📄 config.py
 │ │ 📄 database.py
@@ -17,6 +19,8 @@ DIRECTORY TREE
 │ │ 📄 main.py
 │ │ 📁 api/
 │ │ │ 📁 v1/
+│ │ │ │ 📄 __init__.py
+│ │ │ │ 📄 admin.py
 │ │ │ │ 📄 auth.py
 │ │ │ │ 📄 comments.py
 │ │ │ │ 📄 posts.py
@@ -42,12 +46,14 @@ DIRECTORY TREE
 │ │ │ 📄 user_repository.py
 │ │ 📁 schemas/
 │ │ │ 📄 __init__.py
+│ │ │ 📄 admin.py
 │ │ │ 📄 auth.py
 │ │ │ 📄 comment.py
 │ │ │ 📄 notification.py
 │ │ │ 📄 post.py
 │ │ │ 📄 user.py
 │ │ 📁 services/
+│ │ │ 📄 admin_service.py
 │ │ │ 📄 auth_service.py
 │ │ │ 📄 comment_service.py
 │ │ │ 📄 notification_service.py
@@ -57,6 +63,7 @@ DIRECTORY TREE
 │ │ 📁 utils/
 │ │ │ 📄 logger.py
 │ 📁 logs/
+│ 📁 migrations/
 FILE CONTENTS
 FILE: .env.example
 # Application
@@ -102,6 +109,26 @@ RATE_LIMIT_PER_MINUTE=60
 # Logging
 LOG_LEVEL=INFO
 LOG_FILE=logs/app.log
+FILE: Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps (for psycopg2 etc.)
+RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+
+# Install requirements
+COPY requirements.txt ./
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Copy all project files
+COPY . .
+
+# Expose port
+EXPOSE 8000
+
+# ---- THIS IS THE IMPORTANT LINE ----
+CMD ["uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
 FILE: alembic/README
 Generic single-database configuration.
 FILE: alembic/env.py
@@ -332,10 +359,621 @@ def downgrade() -> None:
     op.drop_table('users')
     op.drop_index(op.f('ix_roles_id'), table_name='roles')
     op.drop_table('roles')
+FILE: alembic/versions/a8007ce4c758_add_rbac_fields.py
+"""add_rbac_fields
+
+Revision ID: a8007ce4c758
+Revises: 7d82d4f9f341
+Create Date: 2025-12-04 09:41:34.520665
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+revision: str = 'a8007ce4c758'
+down_revision: Union[str, Sequence[str], None] = '7d82d4f9f341'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    op.alter_column('favorites', 'created_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+    op.add_column('posts', sa.Column('comment_count', sa.Integer(), nullable=True))
+    op.add_column('posts', sa.Column('lock_reason', sa.String(length=500), nullable=True))
+    op.add_column('posts', sa.Column('locked_at', sa.DateTime(), nullable=True))
+    op.add_column('posts', sa.Column('deleted_at', sa.DateTime(), nullable=True))
+    op.alter_column('posts', 'upvotes',
+               existing_type=sa.INTEGER(),
+               nullable=True)
+    op.alter_column('posts', 'downvotes',
+               existing_type=sa.INTEGER(),
+               nullable=True)
+    op.alter_column('posts', 'is_locked',
+               existing_type=sa.BOOLEAN(),
+               nullable=True)
+    op.alter_column('posts', 'is_deleted',
+               existing_type=sa.BOOLEAN(),
+               nullable=True)
+    op.alter_column('posts', 'created_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+    op.alter_column('posts', 'updated_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               existing_nullable=True)
+    op.add_column('users', sa.Column('ban_reason', sa.String(length=500), nullable=True))
+    op.add_column('users', sa.Column('banned_at', sa.DateTime(), nullable=True))
+    op.add_column('users', sa.Column('banned_by_id', sa.Integer(), nullable=True))
+    op.alter_column('users', 'firebase_uid',
+               existing_type=sa.VARCHAR(length=128),
+               nullable=True)
+    op.alter_column('users', 'bio',
+               existing_type=sa.VARCHAR(length=500),
+               type_=sa.Text(),
+               existing_nullable=True)
+    op.alter_column('users', 'role_id',
+               existing_type=sa.INTEGER(),
+               nullable=True)
+    op.alter_column('users', 'is_active',
+               existing_type=sa.BOOLEAN(),
+               nullable=True)
+    op.alter_column('users', 'is_banned',
+               existing_type=sa.BOOLEAN(),
+               nullable=True)
+    op.alter_column('users', 'created_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+    op.alter_column('users', 'updated_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               existing_nullable=True)
+    op.create_foreign_key(None, 'users', 'users', ['banned_by_id'], ['id'])
+    op.alter_column('votes', 'created_at',
+               existing_type=postgresql.TIMESTAMP(timezone=True),
+               type_=sa.DateTime(),
+               nullable=True,
+               existing_server_default=sa.text('now()'))
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    op.alter_column('votes', 'created_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+    op.drop_constraint(None, 'users', type_='foreignkey')
+    op.alter_column('users', 'updated_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               existing_nullable=True)
+    op.alter_column('users', 'created_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+    op.alter_column('users', 'is_banned',
+               existing_type=sa.BOOLEAN(),
+               nullable=False)
+    op.alter_column('users', 'is_active',
+               existing_type=sa.BOOLEAN(),
+               nullable=False)
+    op.alter_column('users', 'role_id',
+               existing_type=sa.INTEGER(),
+               nullable=False)
+    op.alter_column('users', 'bio',
+               existing_type=sa.Text(),
+               type_=sa.VARCHAR(length=500),
+               existing_nullable=True)
+    op.alter_column('users', 'firebase_uid',
+               existing_type=sa.VARCHAR(length=128),
+               nullable=False)
+    op.drop_column('users', 'banned_by_id')
+    op.drop_column('users', 'banned_at')
+    op.drop_column('users', 'ban_reason')
+    op.alter_column('posts', 'updated_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               existing_nullable=True)
+    op.alter_column('posts', 'created_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+    op.alter_column('posts', 'is_deleted',
+               existing_type=sa.BOOLEAN(),
+               nullable=False)
+    op.alter_column('posts', 'is_locked',
+               existing_type=sa.BOOLEAN(),
+               nullable=False)
+    op.alter_column('posts', 'downvotes',
+               existing_type=sa.INTEGER(),
+               nullable=False)
+    op.alter_column('posts', 'upvotes',
+               existing_type=sa.INTEGER(),
+               nullable=False)
+    op.drop_column('posts', 'deleted_at')
+    op.drop_column('posts', 'locked_at')
+    op.drop_column('posts', 'lock_reason')
+    op.drop_column('posts', 'comment_count')
+    op.alter_column('favorites', 'created_at',
+               existing_type=sa.DateTime(),
+               type_=postgresql.TIMESTAMP(timezone=True),
+               nullable=False,
+               existing_server_default=sa.text('now()'))
+FILE: app/api/v1/__init__.py
+from fastapi import APIRouter
+from app.api.v1 import auth, posts, comments, users, websocket, admin
+
+api_router = APIRouter()
+
+api_router.include_router(auth.router)
+api_router.include_router(posts.router)
+api_router.include_router(comments.router)
+api_router.include_router(users.router)
+api_router.include_router(websocket.router)
+api_router.include_router(admin.router)
+FILE: app/api/v1/admin.py
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from typing import Optional
+
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.core.permissions import (
+    get_admin_user, get_moderator_user,
+    Permissions, has_permission, is_admin, ROLE_PERMISSIONS, get_user_role
+)
+from app.models.user import User
+from app.services.admin_service import AdminService
+from app.schemas.admin import (
+    UserListResponse, UserListItem, UserDetailResponse,
+    BanUserRequest, ChangeRoleRequest, ActionResponse,
+    PostAdminListResponse, PostAdminListItem, LockPostRequest,
+    CommentAdminListResponse, CommentAdminListItem,
+    DashboardResponse, RoleListResponse
+)
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+@router.get("/me/permissions")
+async def get_my_permissions(
+    current_user: User = Depends(get_current_user)
+):
+    """Get current user's role and permissions."""
+    role = get_user_role(current_user)
+    permissions = ROLE_PERMISSIONS.get(role, [])
+
+    return {
+        "user_id": current_user.id,
+        "username": current_user.username,
+        "role": role,
+        "permissions": permissions,
+        "is_admin": role == "admin",
+        "is_moderator": role in ["admin", "moderator"]
+    }
+
+@router.get("/dashboard", response_model=DashboardResponse)
+async def get_dashboard(
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get admin dashboard data."""
+    service = AdminService(db)
+    stats = service.get_dashboard_stats()
+    activity = service.get_recent_activity()
+
+    return DashboardResponse(stats=stats, recent_activity=activity)
+
+@router.get("/users", response_model=UserListResponse)
+async def get_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    role: Optional[str] = None,
+    status: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get paginated list of users (Admin only)."""
+    service = AdminService(db)
+    users, total = service.get_users(
+        page=page,
+        page_size=page_size,
+        search=search,
+        role_filter=role,
+        status_filter=status,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+    user_items = []
+    for user in users:
+        post_count = len(user.posts) if hasattr(user, 'posts') and user.posts else 0
+        comment_count = len(user.comments) if hasattr(user, 'comments') and user.comments else 0
+
+        user_items.append(UserListItem(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            avatar_url=user.avatar_url,
+            role=user.role.name if user.role else "user",
+            is_active=user.is_active,
+            is_banned=user.is_banned,
+            created_at=user.created_at,
+            post_count=post_count,
+            comment_count=comment_count
+        ))
+
+    return UserListResponse(
+        users=user_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=(page * page_size) < total
+    )
+
+@router.get("/users/{user_id}", response_model=UserDetailResponse)
+async def get_user_detail(
+    user_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed user information (Admin only)."""
+    service = AdminService(db)
+    user = service.get_user_detail(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    post_count = len(user.posts) if hasattr(user, 'posts') and user.posts else 0
+    comment_count = len(user.comments) if hasattr(user, 'comments') and user.comments else 0
+
+    return UserDetailResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        avatar_url=user.avatar_url,
+        bio=user.bio,
+        role=user.role.name if user.role else "user",
+        is_active=user.is_active,
+        is_banned=user.is_banned,
+        ban_reason=getattr(user, 'ban_reason', None),
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        post_count=post_count,
+        comment_count=comment_count
+    )
+
+@router.post("/users/{user_id}/ban", response_model=ActionResponse)
+async def ban_user(
+    user_id: int,
+    request: BanUserRequest,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Ban a user (Admin only)."""
+    service = AdminService(db)
+
+    try:
+        user = service.ban_user(user_id, current_user.id, request.reason)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        return ActionResponse(
+            success=True,
+            message=f"User {user.username} has been banned"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.post("/users/{user_id}/unban", response_model=ActionResponse)
+async def unban_user(
+    user_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Unban a user (Admin only)."""
+    service = AdminService(db)
+    user = service.unban_user(user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message=f"User {user.username} has been unbanned"
+    )
+
+@router.post("/users/{user_id}/role", response_model=ActionResponse)
+async def change_user_role(
+    user_id: int,
+    request: ChangeRoleRequest,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Change a user's role (Admin only)."""
+    service = AdminService(db)
+
+    try:
+        user = service.change_user_role(user_id, request.role.value, current_user.id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        return ActionResponse(
+            success=True,
+            message=f"User {user.username} role changed to {request.role.value}"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.delete("/users/{user_id}", response_model=ActionResponse)
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a user (Admin only)."""
+    service = AdminService(db)
+
+    try:
+        success = service.delete_user(user_id, current_user.id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        return ActionResponse(
+            success=True,
+            message="User has been deleted"
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+@router.get("/posts", response_model=PostAdminListResponse)
+async def get_posts_admin(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Get paginated list of posts for moderation."""
+    service = AdminService(db)
+    posts, total = service.get_posts_admin(
+        page=page,
+        page_size=page_size,
+        search=search,
+        status_filter=status,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+    post_items = []
+    for post in posts:
+        comment_count = post.comment_count if hasattr(post, 'comment_count') else 0
+        post_items.append(PostAdminListItem(
+            id=post.id,
+            title=post.title,
+            author_username=post.author.username if post.author else "Unknown",
+            author_id=post.user_id,
+            is_locked=post.is_locked,
+            is_deleted=post.is_deleted,
+            upvotes=post.upvotes,
+            downvotes=post.downvotes,
+            comment_count=comment_count,
+            created_at=post.created_at,
+            reports_count=0
+        ))
+
+    return PostAdminListResponse(
+        posts=post_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=(page * page_size) < total
+    )
+
+@router.post("/posts/{post_id}/lock", response_model=ActionResponse)
+async def lock_post(
+    post_id: int,
+    request: LockPostRequest,
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Lock a post to prevent new comments."""
+    service = AdminService(db)
+    post = service.lock_post(post_id, request.reason)
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message=f"Post '{post.title}' has been locked"
+    )
+
+@router.post("/posts/{post_id}/unlock", response_model=ActionResponse)
+async def unlock_post(
+    post_id: int,
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Unlock a post."""
+    service = AdminService(db)
+    post = service.unlock_post(post_id)
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message=f"Post '{post.title}' has been unlocked"
+    )
+
+@router.delete("/posts/{post_id}", response_model=ActionResponse)
+async def delete_post_admin(
+    post_id: int,
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a post (moderator action)."""
+    service = AdminService(db)
+    success = service.delete_post_admin(post_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message="Post has been deleted"
+    )
+
+@router.post("/posts/{post_id}/restore", response_model=ActionResponse)
+async def restore_post(
+    post_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Restore a deleted post (Admin only)."""
+    service = AdminService(db)
+    post = service.restore_post(post_id)
+
+    if not post:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Post not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message=f"Post '{post.title}' has been restored"
+    )
+
+@router.get("/comments", response_model=CommentAdminListResponse)
+async def get_comments_admin(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    post_id: Optional[int] = None,
+    status: Optional[str] = None,
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Get paginated list of comments for moderation."""
+    service = AdminService(db)
+    comments, total = service.get_comments_admin(
+        page=page,
+        page_size=page_size,
+        search=search,
+        post_id=post_id,
+        status_filter=status
+    )
+
+    comment_items = []
+    for comment in comments:
+        comment_items.append(CommentAdminListItem(
+            id=comment.id,
+            content=comment.content[:200] + "..." if len(comment.content) > 200 else comment.content,
+            author_username=comment.author.username if comment.author else "Unknown",
+            author_id=comment.user_id,
+            post_id=comment.post_id,
+            post_title=comment.post.title if comment.post else "Unknown",
+            is_deleted=comment.is_deleted,
+            upvotes=comment.upvotes,
+            downvotes=comment.downvotes,
+            created_at=comment.created_at,
+            reports_count=0
+        ))
+
+    return CommentAdminListResponse(
+        comments=comment_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        has_more=(page * page_size) < total
+    )
+
+@router.delete("/comments/{comment_id}", response_model=ActionResponse)
+async def delete_comment_admin(
+    comment_id: int,
+    current_user: User = Depends(get_moderator_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a comment (moderator action)."""
+    service = AdminService(db)
+    success = service.delete_comment_admin(comment_id)
+
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comment not found"
+        )
+
+    return ActionResponse(
+        success=True,
+        message="Comment has been deleted"
+    )
+
+@router.get("/roles", response_model=RoleListResponse)
+async def get_roles(
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """Get all roles with user counts (Admin only)."""
+    service = AdminService(db)
+    roles = service.get_roles()
+
+    return RoleListResponse(roles=roles)
 FILE: app/api/v1/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
 from app.database import get_db
 from app.schemas.auth import RegisterRequest, FirebaseTokenRequest, TokenResponse
 from app.services.auth_service import AuthService
@@ -350,7 +988,6 @@ async def register(
     register_data: RegisterRequest,
     db: Session = Depends(get_db),
 ):
-    """Register a new user after Firebase authentication."""
     auth_service = AuthService(db)
     return auth_service.register_user(register_data)
 
@@ -359,7 +996,6 @@ async def login(
     login_data: FirebaseTokenRequest,
     db: Session = Depends(get_db),
 ):
-    """Login user with Firebase ID token."""
     auth_service = AuthService(db)
     return auth_service.login_user(login_data.id_token)
 FILE: app/api/v1/comments.py
@@ -816,12 +1452,6 @@ def _initialize_firebase() -> None:
         firebase_admin.initialize_app()
 
 def verify_firebase_id_token(id_token: str) -> Dict[str, Any]:
-    """
-    Validate a Firebase ID token and return its claims.
-
-    Raises:
-        ValueError: when token is invalid.
-    """
     _initialize_firebase()
     try:
         return firebase_auth.verify_id_token(id_token)
@@ -829,107 +1459,146 @@ def verify_firebase_id_token(id_token: str) -> Dict[str, Any]:
         app_logger.error(f"Firebase token verification failed: {exc}")
         raise ValueError("Invalid Firebase ID token") from exc
 FILE: app/core/permissions.py
-from typing import List
 from functools import wraps
-from fastapi import HTTPException, status
-from app.models.user import User
-from app.utils.logger import app_logger
+from typing import Callable, List, Optional
+from fastapi import HTTPException, status, Depends
+from sqlalchemy.orm import Session
 
-PERMISSIONS = {
-    'user': [
-        'post:create',
-        'post:edit:own',
-        'post:delete:own',
-        'comment:create',
-        'comment:edit:own',
-        'comment:delete:own',
-        'vote:create',
-        'favorite:manage',
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.models.user import User
+
+class Permissions:
+    CREATE_POST = "create_post"
+    EDIT_OWN_POST = "edit_own_post"
+    DELETE_OWN_POST = "delete_own_post"
+    CREATE_COMMENT = "create_comment"
+    EDIT_OWN_COMMENT = "edit_own_comment"
+    DELETE_OWN_COMMENT = "delete_own_comment"
+    VOTE = "vote"
+    FAVORITE = "favorite"
+
+    DELETE_ANY_POST = "delete_any_post"
+    DELETE_ANY_COMMENT = "delete_any_comment"
+    LOCK_POST = "lock_post"
+    UNLOCK_POST = "unlock_post"
+    BAN_USER_FROM_THREAD = "ban_user_from_thread"
+    VIEW_REPORTS = "view_reports"
+
+    BAN_USER = "ban_user"
+    UNBAN_USER = "unban_user"
+    PROMOTE_USER = "promote_user"
+    DEMOTE_USER = "demote_user"
+    DELETE_USER = "delete_user"
+    VIEW_ALL_USERS = "view_all_users"
+    MANAGE_ROLES = "manage_roles"
+    VIEW_ADMIN_DASHBOARD = "view_admin_dashboard"
+    MANAGE_CATEGORIES = "manage_categories"
+
+ROLE_PERMISSIONS = {
+    "admin": [
+        Permissions.CREATE_POST,
+        Permissions.EDIT_OWN_POST,
+        Permissions.DELETE_OWN_POST,
+        Permissions.CREATE_COMMENT,
+        Permissions.EDIT_OWN_COMMENT,
+        Permissions.DELETE_OWN_COMMENT,
+        Permissions.VOTE,
+        Permissions.FAVORITE,
+        Permissions.DELETE_ANY_POST,
+        Permissions.DELETE_ANY_COMMENT,
+        Permissions.LOCK_POST,
+        Permissions.UNLOCK_POST,
+        Permissions.BAN_USER_FROM_THREAD,
+        Permissions.VIEW_REPORTS,
+        Permissions.BAN_USER,
+        Permissions.UNBAN_USER,
+        Permissions.PROMOTE_USER,
+        Permissions.DEMOTE_USER,
+        Permissions.DELETE_USER,
+        Permissions.VIEW_ALL_USERS,
+        Permissions.MANAGE_ROLES,
+        Permissions.VIEW_ADMIN_DASHBOARD,
+        Permissions.MANAGE_CATEGORIES,
     ],
-    'moderator': [
-        'post:create',
-        'post:edit:own',
-        'post:delete:own',
-        'comment:create',
-        'comment:edit:own',
-        'comment:delete:own',
-        'comment:delete:any',
-        'vote:create',
-        'favorite:manage',
-        'user:ban:comment',
-        'thread:lock',
-        'reports:view',
+    "moderator": [
+        Permissions.CREATE_POST,
+        Permissions.EDIT_OWN_POST,
+        Permissions.DELETE_OWN_POST,
+        Permissions.CREATE_COMMENT,
+        Permissions.EDIT_OWN_COMMENT,
+        Permissions.DELETE_OWN_COMMENT,
+        Permissions.VOTE,
+        Permissions.FAVORITE,
+        Permissions.DELETE_ANY_POST,
+        Permissions.DELETE_ANY_COMMENT,
+        Permissions.LOCK_POST,
+        Permissions.UNLOCK_POST,
+        Permissions.BAN_USER_FROM_THREAD,
+        Permissions.VIEW_REPORTS,
     ],
-    'admin': [
-        'post:create',
-        'post:edit:own',
-        'post:edit:any',
-        'post:delete:own',
-        'post:delete:any',
-        'post:lock',
-        'comment:create',
-        'comment:edit:own',
-        'comment:edit:any',
-        'comment:delete:own',
-        'comment:delete:any',
-        'vote:create',
-        'favorite:manage',
-        'user:ban:platform',
-        'user:ban:comment',
-        'moderator:manage',
-        'logs:view',
-        'reports:view',
-    ]
+    "user": [
+        Permissions.CREATE_POST,
+        Permissions.EDIT_OWN_POST,
+        Permissions.DELETE_OWN_POST,
+        Permissions.CREATE_COMMENT,
+        Permissions.EDIT_OWN_COMMENT,
+        Permissions.DELETE_OWN_COMMENT,
+        Permissions.VOTE,
+        Permissions.FAVORITE,
+    ],
 }
 
-def get_user_permissions(user: User) -> List[str]:
-    """
-    Get all permissions for a user based on their role.
-
-    Args:
-        user: User model instance
-
-    Returns:
-        List of permission strings
-    """
-    if not user.role:
-        return PERMISSIONS.get('user', [])
-
-    role_name = user.role.name.lower()
-    return PERMISSIONS.get(role_name, [])
+def get_user_role(user: User) -> str:
+    """Get the role name for a user."""
+    if user.role:
+        return user.role.name
+    return "user"
 
 def has_permission(user: User, permission: str) -> bool:
-    """
-    Check if user has specific permission.
-
-    Args:
-        user: User model instance
-        permission: Permission string (e.g., 'post:delete:any')
-
-    Returns:
-        True if user has permission, False otherwise
-    """
-    if not user.is_active or user.is_banned:
+    """Check if a user has a specific permission."""
+    if not user or not user.is_active or user.is_banned:
         return False
 
-    user_permissions = get_user_permissions(user)
-    return permission in user_permissions
+    role_name = get_user_role(user)
+    role_permissions = ROLE_PERMISSIONS.get(role_name, [])
+
+    return permission in role_permissions
+
+def has_any_permission(user: User, permissions: List[str]) -> bool:
+    """Check if a user has any of the specified permissions."""
+    return any(has_permission(user, p) for p in permissions)
+
+def has_all_permissions(user: User, permissions: List[str]) -> bool:
+    """Check if a user has all of the specified permissions."""
+    return all(has_permission(user, p) for p in permissions)
+
+def is_admin(user: User) -> bool:
+    """Check if user is an admin."""
+    return get_user_role(user) == "admin"
+
+def is_moderator(user: User) -> bool:
+    """Check if user is a moderator or admin."""
+    return get_user_role(user) in ["admin", "moderator"]
+
+def is_owner(user: User, resource_user_id: int) -> bool:
+    """Check if user owns a resource."""
+    return user.id == resource_user_id
+
+def can_moderate_content(user: User, content_user_id: int) -> bool:
+    """Check if user can moderate content (owner or moderator+)."""
+    return is_owner(user, content_user_id) or is_moderator(user)
+
+def check_resource_ownership(user: User, resource_user_id: int) -> bool:
+    """Check if user owns the resource."""
+    return user.id == resource_user_id
 
 def require_permission(permission: str):
-    """
-    Decorator to require specific permission for endpoint.
-
-    Usage:
-        @router.delete("/posts/{post_id}")
-        @require_permission("post:delete:any")
-        async def delete_post(post_id: int, current_user: User = Depends(get_current_user)):
-            ...
-    """
-    def decorator(func):
+    """Decorator to require a specific permission."""
+    def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            current_user = kwargs.get('current_user')
-
+            current_user = kwargs.get("current_user")
             if not current_user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -937,34 +1606,86 @@ def require_permission(permission: str):
                 )
 
             if not has_permission(current_user, permission):
-                app_logger.warning(
-                    f"User {current_user.id} denied permission: {permission}"
-                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"You don't have permission to perform this action"
+                    detail=f"Permission denied: {permission} required"
                 )
 
             return await func(*args, **kwargs)
-
         return wrapper
     return decorator
 
-def check_resource_ownership(user: User, resource_user_id: int) -> bool:
-    """
-    Check if user owns the resource or has admin privileges.
+def require_any_permission(permissions: List[str]):
+    """Decorator to require any of the specified permissions."""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            current_user = kwargs.get("current_user")
+            if not current_user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required"
+                )
 
-    Args:
-        user: Current user
-        resource_user_id: User ID of resource owner
+            if not has_any_permission(current_user, permissions):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Permission denied"
+                )
 
-    Returns:
-        True if user owns resource or is admin
-    """
-    if user.id == resource_user_id:
-        return True
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-    return has_permission(user, 'post:edit:any')
+def require_role(roles: List[str]):
+    """Decorator to require specific roles."""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            current_user = kwargs.get("current_user")
+            if not current_user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required"
+                )
+
+            user_role = get_user_role(current_user)
+            if user_role not in roles:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Role {user_role} not authorized. Required: {', '.join(roles)}"
+                )
+
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that ensures user is an admin."""
+    if not is_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+def get_moderator_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that ensures user is a moderator or admin."""
+    if not is_moderator(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator access required"
+        )
+    return current_user
+
+def check_not_banned(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency that ensures user is not banned."""
+    if current_user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been banned"
+        )
+    return current_user
 FILE: app/core/redis_client.py
 import redis
 from redis import Redis
@@ -1148,14 +1869,9 @@ SessionLocal = sessionmaker(
 
 Base = declarative_base()
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session, None,None]:
     """
     Dependency function to get database session.
-
-    Usage in FastAPI:
-        @router.get("/items")
-        def get_items(db: Session = Depends(get_db)):
-            ...
     """
     db = SessionLocal()
     try:
@@ -1259,7 +1975,7 @@ from app.services.notification_stream import (
     stop_notification_worker,
 )
 
-from app.api.v1 import auth, posts, comments, users, websocket
+from app.api.v1 import auth, posts, comments, users, websocket, admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1306,6 +2022,7 @@ app.include_router(posts.router, prefix="/api/v1")
 app.include_router(comments.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(websocket.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
@@ -1461,9 +2178,10 @@ class Notification(Base):
     def __repr__(self):
         return f"<Notification {self.id} for user {self.user_id}>"
 FILE: app/models/post.py
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import datetime
+
 from app.database import Base
 
 class Post(Base):
@@ -1471,22 +2189,26 @@ class Post(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-
     title = Column(String(300), nullable=False)
-    image_url = Column(Text, nullable=True)
-    tag = Column(String(50), nullable=True, index=True)
     description = Column(Text, nullable=True)
+    tag = Column(String(50), nullable=True, index=True)
+    image_url = Column(Text, nullable=True)
 
-    upvotes = Column(Integer, default=0, nullable=False)
-    downvotes = Column(Integer, default=0, nullable=False)
+    upvotes = Column(Integer, default=0)
+    downvotes = Column(Integer, default=0)
+    comment_count = Column(Integer, default=0)
 
-    is_locked = Column(Boolean, default=False, nullable=False)
-    is_deleted = Column(Boolean, default=False, nullable=False)
+    is_locked = Column(Boolean, default=False)
+    lock_reason = Column(String(500), nullable=True)
+    locked_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    is_deleted = Column(Boolean, default=False)
+    deleted_at = Column(DateTime, nullable=True)
 
-    author = relationship("User", back_populates="posts")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    author = relationship("User", back_populates="posts", foreign_keys=[user_id])
     comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
     votes = relationship("Vote", back_populates="post", cascade="all, delete-orphan")
     favorites = relationship("Favorite", back_populates="post", cascade="all, delete-orphan")
@@ -1502,8 +2224,7 @@ class Vote(Base):
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=True)
     comment_id = Column(Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
     vote_type = Column(String(10), nullable=False)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     post = relationship("Post", back_populates="votes")
     comment = relationship("Comment", back_populates="votes")
@@ -1517,15 +2238,15 @@ class Favorite(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     post_id = Column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), nullable=False)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     post = relationship("Post", back_populates="favorites")
 
     def __repr__(self):
-        return f"<Favorite user={self.user_id} post={self.post_id}>"
+        return f"<Favorite post {self.post_id} by user {self.user_id}>"
 FILE: app/models/role.py
 from sqlalchemy import Column, Integer, String, JSON
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 class Role(Base):
@@ -1535,36 +2256,44 @@ class Role(Base):
     name = Column(String(50), unique=True, nullable=False)
     permissions = Column(JSON, nullable=False, default=list)
 
+    users = relationship("User", back_populates="role")
+
     def __repr__(self):
         return f"<Role {self.name}>"
 FILE: app/models/user.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from datetime import datetime
+
 from app.database import Base
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    firebase_uid = Column(String(128), unique=True, nullable=False, index=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    username = Column(String(50), unique=True, nullable=False, index=True)
+    firebase_uid = Column(String(128), unique=True, index=True, nullable=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    username = Column(String(50), unique=True, index=True, nullable=False)
     avatar_url = Column(String(500), nullable=True)
-    bio = Column(String(500), nullable=True)
+    bio = Column(Text, nullable=True)
 
-    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, default=3)
-    role = relationship("Role", backref="users")
+    role_id = Column(Integer, ForeignKey("roles.id"), default=3)
 
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_banned = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_banned = Column(Boolean, default=False)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    ban_reason = Column(String(500), nullable=True)
+    banned_at = Column(DateTime, nullable=True)
+    banned_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    posts = relationship("Post", back_populates="author", cascade="all, delete-orphan")
-    comments = relationship("Comment", back_populates="author", cascade="all, delete-orphan")
-    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    role = relationship("Role", back_populates="users")
+    posts = relationship("Post", back_populates="author", foreign_keys="Post.user_id")
+    comments = relationship("Comment", back_populates="author", foreign_keys="Comment.user_id")
+    notifications = relationship("Notification", back_populates="user")
+    banned_by = relationship("User", remote_side=[id], foreign_keys=[banned_by_id])
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -2049,15 +2778,177 @@ from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.post import PostCreate, PostUpdate, PostResponse
 from app.schemas.comment import CommentCreate, CommentUpdate, CommentResponse
 from app.schemas.auth import RegisterRequest, TokenResponse
+FILE: app/schemas/admin.py
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from datetime import datetime
+from enum import Enum
+
+class RoleEnum(str, Enum):
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    USER = "user"
+
+class UserListItem(BaseModel):
+    id: int
+    username: str
+    email: str
+    avatar_url: Optional[str] = None
+    role: str
+    is_active: bool
+    is_banned: bool
+    created_at: datetime
+    post_count: int = 0
+    comment_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+class UserListResponse(BaseModel):
+    users: List[UserListItem]
+    total: int
+    page: int
+    page_size: int
+    has_more: bool
+
+class UserDetailResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+    role: str
+    is_active: bool
+    is_banned: bool
+    ban_reason: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    post_count: int = 0
+    comment_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+class BanUserRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
+
+class ChangeRoleRequest(BaseModel):
+    role: RoleEnum
+
+class UserUpdateRequest(BaseModel):
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    email: Optional[str] = None
+    bio: Optional[str] = Field(None, max_length=500)
+    is_active: Optional[bool] = None
+
+class PostAdminListItem(BaseModel):
+    id: int
+    title: str
+    author_username: str
+    author_id: int
+    is_locked: bool
+    is_deleted: bool
+    upvotes: int
+    downvotes: int
+    comment_count: int
+    created_at: datetime
+    reports_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+class PostAdminListResponse(BaseModel):
+    posts: List[PostAdminListItem]
+    total: int
+    page: int
+    page_size: int
+    has_more: bool
+
+class LockPostRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=500)
+
+class CommentAdminListItem(BaseModel):
+    id: int
+    content: str
+    author_username: str
+    author_id: int
+    post_id: int
+    post_title: str
+    is_deleted: bool
+    upvotes: int
+    downvotes: int
+    created_at: datetime
+    reports_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+class CommentAdminListResponse(BaseModel):
+    comments: List[CommentAdminListItem]
+    total: int
+    page: int
+    page_size: int
+    has_more: bool
+
+class DashboardStats(BaseModel):
+    total_users: int
+    active_users: int
+    banned_users: int
+    total_posts: int
+    total_comments: int
+    posts_today: int
+    comments_today: int
+    new_users_today: int
+
+class RecentActivity(BaseModel):
+    type: str
+    message: str
+    timestamp: datetime
+    user_id: Optional[int] = None
+    post_id: Optional[int] = None
+
+class DashboardResponse(BaseModel):
+    stats: DashboardStats
+    recent_activity: List[RecentActivity]
+
+class RoleInfo(BaseModel):
+    id: int
+    name: str
+    permissions: List[str]
+    user_count: int
+
+    class Config:
+        from_attributes = True
+
+class RoleListResponse(BaseModel):
+    roles: List[RoleInfo]
+
+class ThreadBanRequest(BaseModel):
+    user_id: int
+    post_id: int
+    reason: Optional[str] = Field(None, max_length=500)
+
+class ThreadBanResponse(BaseModel):
+    id: int
+    user_id: int
+    post_id: int
+    banned_by_id: int
+    reason: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ActionResponse(BaseModel):
+    success: bool
+    message: str
 FILE: app/schemas/auth.py
 from pydantic import BaseModel, EmailStr
 
 class FirebaseTokenRequest(BaseModel):
-    """Firebase ID token for authentication."""
     id_token: str
 
 class RegisterRequest(BaseModel):
-    """User registration request."""
     id_token: str
     firebase_uid: str
     email: EmailStr
@@ -2072,7 +2963,6 @@ class TokenUser(BaseModel):
     role: str
 
 class TokenResponse(BaseModel):
-    """JWT token response."""
     access_token: str
     token_type: str = "bearer"
     user: TokenUser
@@ -2257,6 +3147,376 @@ class UserProfile(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+FILE: app/services/admin_service.py
+from typing import Optional, List, Tuple
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, and_
+
+from app.models.user import User
+from app.models.role import Role
+from app.models.post import Post
+from app.models.comment import Comment
+from app.schemas.admin import (
+    UserListItem, UserDetailResponse, DashboardStats,
+    RecentActivity, PostAdminListItem, CommentAdminListItem,
+    RoleInfo
+)
+
+class AdminService:
+    def __init__(self, db: Session):
+        self.db = db
+
+
+    def get_users(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        search: Optional[str] = None,
+        role_filter: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc"
+    ) -> Tuple[List[User], int]:
+        """Get paginated list of users with filters."""
+        query = self.db.query(User)
+
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    User.username.ilike(search_term),
+                    User.email.ilike(search_term)
+                )
+            )
+
+        if role_filter:
+            query = query.join(Role).filter(Role.name == role_filter)
+
+        if status_filter == "active":
+            query = query.filter(User.is_active == True, User.is_banned == False)
+        elif status_filter == "banned":
+            query = query.filter(User.is_banned == True)
+        elif status_filter == "inactive":
+            query = query.filter(User.is_active == False)
+
+        total = query.count()
+
+        sort_column = getattr(User, sort_by, User.created_at)
+        if sort_order == "desc":
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+
+        offset = (page - 1) * page_size
+        users = query.offset(offset).limit(page_size).all()
+
+        return users, total
+
+    def get_user_detail(self, user_id: int) -> Optional[User]:
+        """Get detailed user information."""
+        return self.db.query(User).filter(User.id == user_id).first()
+
+    def ban_user(self, user_id: int, admin_id: int, reason: Optional[str] = None) -> Optional[User]:
+        """Ban a user."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+
+        if user.role and user.role.name == "admin":
+            raise ValueError("Cannot ban an admin user")
+
+        if user_id == admin_id:
+            raise ValueError("Cannot ban yourself")
+
+        user.is_banned = True
+        user.ban_reason = reason
+        user.banned_at = datetime.utcnow()
+        user.banned_by_id = admin_id
+
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def unban_user(self, user_id: int) -> Optional[User]:
+        """Unban a user."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+
+        user.is_banned = False
+        user.ban_reason = None
+        user.banned_at = None
+        user.banned_by_id = None
+
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def change_user_role(self, user_id: int, new_role: str, admin_id: int) -> Optional[User]:
+        """Change a user's role."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+
+        if user_id == admin_id and new_role != "admin":
+            raise ValueError("Cannot demote yourself")
+
+        role = self.db.query(Role).filter(Role.name == new_role).first()
+        if not role:
+            raise ValueError(f"Role '{new_role}' not found")
+
+        user.role_id = role.id
+
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    def delete_user(self, user_id: int, admin_id: int) -> bool:
+        """Delete a user (soft delete by deactivating)."""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return False
+
+        if user_id == admin_id:
+            raise ValueError("Cannot delete yourself")
+
+        if user.role and user.role.name == "admin":
+            raise ValueError("Cannot delete an admin user")
+
+        user.is_active = False
+        user.is_banned = True
+        user.email = f"deleted_{user.id}@deleted.local"
+        user.username = f"deleted_user_{user.id}"
+
+        self.db.commit()
+        return True
+
+
+    def get_posts_admin(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        search: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc"
+    ) -> Tuple[List[Post], int]:
+        """Get paginated list of posts for admin."""
+        query = self.db.query(Post)
+
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(Post.title.ilike(search_term))
+
+        if status_filter == "locked":
+            query = query.filter(Post.is_locked == True)
+        elif status_filter == "deleted":
+            query = query.filter(Post.is_deleted == True)
+        elif status_filter == "active":
+            query = query.filter(Post.is_locked == False, Post.is_deleted == False)
+
+        total = query.count()
+
+        sort_column = getattr(Post, sort_by, Post.created_at)
+        if sort_order == "desc":
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+
+        offset = (page - 1) * page_size
+        posts = query.offset(offset).limit(page_size).all()
+
+        return posts, total
+
+    def lock_post(self, post_id: int, reason: Optional[str] = None) -> Optional[Post]:
+        """Lock a post to prevent new comments."""
+        post = self.db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            return None
+
+        post.is_locked = True
+        post.lock_reason = reason
+        post.locked_at = datetime.utcnow()
+
+        self.db.commit()
+        self.db.refresh(post)
+        return post
+
+    def unlock_post(self, post_id: int) -> Optional[Post]:
+        """Unlock a post."""
+        post = self.db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            return None
+
+        post.is_locked = False
+        post.lock_reason = None
+        post.locked_at = None
+
+        self.db.commit()
+        self.db.refresh(post)
+        return post
+
+    def delete_post_admin(self, post_id: int) -> bool:
+        """Admin delete a post (soft delete)."""
+        post = self.db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            return False
+
+        post.is_deleted = True
+        post.deleted_at = datetime.utcnow()
+
+        self.db.commit()
+        return True
+
+    def restore_post(self, post_id: int) -> Optional[Post]:
+        """Restore a deleted post."""
+        post = self.db.query(Post).filter(Post.id == post_id).first()
+        if not post:
+            return None
+
+        post.is_deleted = False
+        post.deleted_at = None
+
+        self.db.commit()
+        self.db.refresh(post)
+        return post
+
+
+    def get_comments_admin(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        search: Optional[str] = None,
+        post_id: Optional[int] = None,
+        status_filter: Optional[str] = None
+    ) -> Tuple[List[Comment], int]:
+        """Get paginated list of comments for admin."""
+        query = self.db.query(Comment)
+
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(Comment.content.ilike(search_term))
+
+        if post_id:
+            query = query.filter(Comment.post_id == post_id)
+
+        if status_filter == "deleted":
+            query = query.filter(Comment.is_deleted == True)
+        elif status_filter == "active":
+            query = query.filter(Comment.is_deleted == False)
+
+        total = query.count()
+
+        offset = (page - 1) * page_size
+        comments = query.order_by(Comment.created_at.desc()).offset(offset).limit(page_size).all()
+
+        return comments, total
+
+    def delete_comment_admin(self, comment_id: int) -> bool:
+        """Admin delete a comment (soft delete)."""
+        comment = self.db.query(Comment).filter(Comment.id == comment_id).first()
+        if not comment:
+            return False
+
+        comment.is_deleted = True
+        comment.content = "[Comment deleted by moderator]"
+
+        self.db.commit()
+        return True
+
+
+    def get_dashboard_stats(self) -> DashboardStats:
+        """Get dashboard statistics."""
+        today = datetime.utcnow().date()
+        today_start = datetime.combine(today, datetime.min.time())
+
+        total_users = self.db.query(User).count()
+        active_users = self.db.query(User).filter(
+            User.is_active == True,
+            User.is_banned == False
+        ).count()
+        banned_users = self.db.query(User).filter(User.is_banned == True).count()
+        total_posts = self.db.query(Post).filter(Post.is_deleted == False).count()
+        total_comments = self.db.query(Comment).filter(Comment.is_deleted == False).count()
+
+        posts_today = self.db.query(Post).filter(
+            Post.created_at >= today_start,
+            Post.is_deleted == False
+        ).count()
+
+        comments_today = self.db.query(Comment).filter(
+            Comment.created_at >= today_start,
+            Comment.is_deleted == False
+        ).count()
+
+        new_users_today = self.db.query(User).filter(
+            User.created_at >= today_start
+        ).count()
+
+        return DashboardStats(
+            total_users=total_users,
+            active_users=active_users,
+            banned_users=banned_users,
+            total_posts=total_posts,
+            total_comments=total_comments,
+            posts_today=posts_today,
+            comments_today=comments_today,
+            new_users_today=new_users_today
+        )
+
+    def get_recent_activity(self, limit: int = 10) -> List[RecentActivity]:
+        """Get recent activity for dashboard."""
+        activities = []
+
+        recent_users = self.db.query(User).order_by(
+            User.created_at.desc()
+        ).limit(5).all()
+
+        for user in recent_users:
+            activities.append(RecentActivity(
+                type="user_joined",
+                message=f"New user joined: {user.username}",
+                timestamp=user.created_at,
+                user_id=user.id
+            ))
+
+        recent_posts = self.db.query(Post).filter(
+            Post.is_deleted == False
+        ).order_by(Post.created_at.desc()).limit(5).all()
+
+        for post in recent_posts:
+            activities.append(RecentActivity(
+                type="post_created",
+                message=f"New post: {post.title[:50]}...",
+                timestamp=post.created_at,
+                user_id=post.user_id,
+                post_id=post.id
+            ))
+
+        activities.sort(key=lambda x: x.timestamp, reverse=True)
+        return activities[:limit]
+
+
+    def get_roles(self) -> List[RoleInfo]:
+        """Get all roles with user counts."""
+        roles = self.db.query(Role).all()
+        result = []
+
+        for role in roles:
+            user_count = self.db.query(User).filter(User.role_id == role.id).count()
+            result.append(RoleInfo(
+                id=role.id,
+                name=role.name,
+                permissions=role.permissions or [],
+                user_count=user_count
+            ))
+
+        return result
+
+    def get_user_count_by_role(self, role_name: str) -> int:
+        """Get count of users with a specific role."""
+        return self.db.query(User).join(Role).filter(Role.name == role_name).count()
 FILE: app/services/auth_service.py
 from datetime import timedelta
 
@@ -2704,7 +3964,6 @@ class NotificationService:
         )
 
     def mark_as_read(self, notification_id: int, user_id: int) -> bool:
-        """Mark notification as read."""
         notification = self.db.query(Notification).filter(
             Notification.id == notification_id,
             Notification.user_id == user_id
@@ -2719,7 +3978,6 @@ class NotificationService:
         return False
 
     def mark_all_as_read(self, user_id: int) -> int:
-        """Mark all notifications as read for a user."""
         count = self.db.query(Notification).filter(
             Notification.user_id == user_id,
             Notification.is_read == False
@@ -2730,7 +3988,6 @@ class NotificationService:
         return count
 
     def _publish_to_stream(self, notification: Notification):
-        """Publish notification to Redis Stream for real-time delivery."""
         try:
             notification_data = {
                 "id": str(notification.id),
@@ -3234,11 +4491,11 @@ Usage:
 Or with uvicorn directly:
     uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
-
-import uvicorn
 from fastapi import FastAPI
-from app.config import settings
+
 app = FastAPI()
+import uvicorn
+from app.config import settings
 
 if __name__ == "__main__":
     uvicorn.run(
@@ -3249,83 +4506,115 @@ if __name__ == "__main__":
         log_level=settings.LOG_LEVEL.lower()
     )
 FILE: seed.py
-from app.database import SessionLocal
+from sqlalchemy.orm import Session
+from app.database import engine, SessionLocal
 from app.models.role import Role
-from app.utils.logger import app_logger
+from app.models.user import User
+from app.core.permissions import ROLE_PERMISSIONS
 
-def seed_roles(db):
-    """Seed initial roles and permissions."""
-
+def seed_roles(db: Session):
+    """Seed default roles."""
     roles_data = [
-        {
-            "id": 1,
-            "name": "admin",
-            "permissions": [
-                "post:create", "post:edit:own", "post:edit:any", "post:delete:own",
-                "post:delete:any", "post:lock",
-                "comment:create", "comment:edit:own", "comment:edit:any",
-                "comment:delete:own", "comment:delete:any",
-                "vote:create", "favorite:manage",
-                "user:ban:platform", "user:ban:comment",
-                "moderator:manage", "logs:view", "reports:view",
-            ]
-        },
-        {
-            "id": 2,
-            "name": "moderator",
-            "permissions": [
-                "post:create", "post:edit:own", "post:delete:own",
-                "comment:create", "comment:edit:own", "comment:delete:own",
-                "comment:delete:any",
-                "vote:create", "favorite:manage",
-                "user:ban:comment", "thread:lock", "reports:view",
-            ]
-        },
-        {
-            "id": 3,
-            "name": "user",
-            "permissions": [
-                "post:create", "post:edit:own", "post:delete:own",
-                "comment:create", "comment:edit:own", "comment:delete:own",
-                "vote:create", "favorite:manage",
-            ]
-        }
+        {"id": 1, "name": "admin", "permissions": ROLE_PERMISSIONS["admin"]},
+        {"id": 2, "name": "moderator", "permissions": ROLE_PERMISSIONS["moderator"]},
+        {"id": 3, "name": "user", "permissions": ROLE_PERMISSIONS["user"]},
     ]
 
     for role_data in roles_data:
-        existing = db.query(Role).filter(Role.name == role_data["name"]).first()
+        existing = db.query(Role).filter(Role.id == role_data["id"]).first()
         if not existing:
-            role = Role(**role_data)
+            role = Role(
+                id=role_data["id"],
+                name=role_data["name"],
+                permissions=role_data["permissions"]
+            )
             db.add(role)
-            app_logger.info(f"Created role: {role_data['name']}")
+            print(f"Created role: {role_data['name']}")
         else:
-            app_logger.info(f"Role already exists: {role_data['name']}")
+            existing.permissions = role_data["permissions"]
+            print(f"Updated role: {role_data['name']}")
 
     db.commit()
-    app_logger.info("Roles seeded successfully")
 
-def main():
-    """Main seed function."""
+def seed_users(db: Session):
+    """Seed default users for testing."""
+    users_data = [
+        {
+            "username": "admin",
+            "email": "admin@memeforum.local",
+            "firebase_uid": "admin_firebase_uid_placeholder",
+            "role_id": 1,
+            "is_active": True,
+            "is_banned": False,
+            "bio": "System Administrator"
+        },
+        {
+            "username": "moderator",
+            "email": "moderator@memeforum.local",
+            "firebase_uid": "moderator_firebase_uid_placeholder",
+            "role_id": 2,
+            "is_active": True,
+            "is_banned": False,
+            "bio": "Community Moderator"
+        },
+        {
+            "username": "testuser",
+            "email": "user@memeforum.local",
+            "firebase_uid": "user_firebase_uid_placeholder",
+            "role_id": 3,
+            "is_active": True,
+            "is_banned": False,
+            "bio": "Regular User"
+        },
+    ]
+
+    for user_data in users_data:
+        existing_email = db.query(User).filter(User.email == user_data["email"]).first()
+        existing_username = db.query(User).filter(User.username == user_data["username"]).first()
+
+        if not existing_email and not existing_username:
+            user = User(**user_data)
+            db.add(user)
+            print(f"Created user: {user_data['username']} (role_id: {user_data['role_id']})")
+        else:
+            print(f"User {user_data['username']} already exists")
+
+    db.commit()
+
+def run_seed():
+    """Run all seed functions."""
     db = SessionLocal()
     try:
-        app_logger.info("Starting database seeding...")
+        print("=" * 50)
+        print("Starting database seeding...")
+        print("=" * 50)
+
         seed_roles(db)
-        app_logger.info("Database seeded successfully!")
-    except Exception as e:
-        app_logger.error(f"Seeding failed: {e}")
-        db.rollback()
-        raise
+        print("-" * 50)
+        seed_users(db)
+
+        print("=" * 50)
+        print("Database seeding completed!")
+        print("=" * 50)
+
+        role_count = db.query(Role).count()
+        user_count = db.query(User).count()
+        print(f"Total roles: {role_count}")
+        print(f"Total users: {user_count}")
+
     finally:
         db.close()
 
 if __name__ == "__main__":
-    main()
+    run_seed()
 SUMMARY
-================================================================================
-Total files included: 41
+Total files: 50
+Original size: 159,416 chars
+Processed size: 150,837 chars
+Reduction: 5.4%
 
 File types:
- .py: 41
+ .py: 46
+ [no extension]: 2
  .example: 1
- [no extension]: 1
  .json: 1

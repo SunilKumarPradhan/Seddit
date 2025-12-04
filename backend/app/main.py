@@ -14,7 +14,8 @@ from app.services.notification_stream import (
     stop_notification_worker,
 )
 
-from app.api.v1 import auth, posts, comments, users, websocket
+from app.api.v1 import auth, posts, comments, users, websocket, admin  # Added admin
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,7 +28,7 @@ async def lifespan(app: FastAPI):
     try:
         redis_client.connect()
         notification_task = asyncio.create_task(notification_stream_worker())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         app_logger.error(f"Redis initialization failed: {exc}")
 
     app_logger.info("Application started successfully")
@@ -38,7 +39,7 @@ async def lifespan(app: FastAPI):
         await stop_notification_worker(notification_task)
         redis_client.disconnect()
 
-# Create FastAPI app
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -46,7 +47,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -55,16 +55,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add custom middleware
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
-# Include routers
+# Include all routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(posts.router, prefix="/api/v1")
 app.include_router(comments.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(websocket.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")  # Added admin router
 
 
 @app.get("/")

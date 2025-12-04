@@ -49,7 +49,6 @@ class NotificationService:
         
         notifications = query.order_by(Notification.created_at.desc()).offset(skip).limit(limit).all()
         
-        # Get unread count
         unread_count = self.db.query(Notification).filter(
             Notification.user_id == user_id,
             Notification.is_read == False
@@ -73,7 +72,6 @@ class NotificationService:
         )
     
     def mark_as_read(self, notification_id: int, user_id: int) -> bool:
-        """Mark notification as read."""
         notification = self.db.query(Notification).filter(
             Notification.id == notification_id,
             Notification.user_id == user_id
@@ -88,7 +86,6 @@ class NotificationService:
         return False
     
     def mark_all_as_read(self, user_id: int) -> int:
-        """Mark all notifications as read for a user."""
         count = self.db.query(Notification).filter(
             Notification.user_id == user_id,
             Notification.is_read == False
@@ -99,7 +96,6 @@ class NotificationService:
         return count
     
     def _publish_to_stream(self, notification: Notification):
-        """Publish notification to Redis Stream for real-time delivery."""
         try:
             notification_data = {
                 "id": str(notification.id),

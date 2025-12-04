@@ -69,9 +69,9 @@
             <div 
               class="strength-fill" 
               [style.width.%]="passwordStrength()"
-              [class.weak]="passwordStrength() <= 33"
-              [class.medium]="passwordStrength() > 33 && passwordStrength() <= 66"
-              [class.strong]="passwordStrength() > 66"
+              [class.weak]="passwordStrength() <= 10"
+              [class.medium]="passwordStrength() > 10 && passwordStrength() <= 15"
+              [class.strong]="passwordStrength() > 18"
             ></div>
           </div>
           <span class="strength-text">{{ getPasswordStrengthText() }}</span>
@@ -96,7 +96,7 @@
       <div class="form-options">
         <label class="checkbox-label">
           <input type="checkbox" formControlName="agreeToTerms">
-          <span>I agree to the <a href="/terms" target="_blank">Terms of Service</a></span>
+          <span>I agree to the <a href="/terms" target="https://github.com/sunilkumarpradhan">Terms of Service</a></span>
         </label>
       </div>
       
