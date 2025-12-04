@@ -12,6 +12,8 @@ meme_user user → meme_pass
 
 
 
+docker-compose exec backend alembic revision --autogenerate -m "initial migration"
+
 
 uv run alembic revision --autogenerate -m "after rbac"
 
