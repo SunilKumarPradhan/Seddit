@@ -1,5 +1,6 @@
 <aside class="sidebar" [class.collapsed]="isCollapsed()">
   <nav class="sidebar-nav">
+    <!-- FEEDS Section -->
     <div class="nav-section">
       <h3 class="section-title">FEEDS</h3>
       <a routerLink="/feed" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">
@@ -27,39 +28,69 @@
       }
     </div>
 
+    <!-- MODERATION Section -->
     @if (isAuthenticated()) {
       @if (isAdmin() || isModerator()) {
         <div class="nav-section">
           <h3 class="section-title">MODERATION</h3>
 
           @if (isAdmin()) {
-            <a routerLink="/admin" routerLinkActive="active" class="nav-item">
+            <!-- ✅ Added exact: true to prevent matching child routes -->
+            <a routerLink="/admin" 
+               routerLinkActive="active" 
+               [routerLinkActiveOptions]="{ exact: true }" 
+               class="nav-item">
               <span class="material-icons">admin_panel_settings</span>
               <span class="nav-text">Admin Dashboard</span>
             </a>
-            <a routerLink="/admin/users" routerLinkActive="active" class="nav-item">
+            
+            <a routerLink="/admin/users" 
+               routerLinkActive="active" 
+               class="nav-item">
               <span class="material-icons">manage_accounts</span>
               <span class="nav-text">Manage Users</span>
             </a>
+
+            <a routerLink="/admin/posts" 
+               routerLinkActive="active" 
+               class="nav-item">
+              <span class="material-icons">article</span>
+              <span class="nav-text">Manage Posts</span>
+            </a>
+
+            <a routerLink="/admin/comments" 
+               routerLinkActive="active" 
+               class="nav-item">
+              <span class="material-icons">comment</span>
+              <span class="nav-text">Manage Comments</span>
+            </a>
+          } @else if (isModerator()) {
+            <!-- Moderator-only routes -->
+            <a routerLink="/mod/posts" 
+               routerLinkActive="active" 
+               class="nav-item">
+              <span class="material-icons">article</span>
+              <span class="nav-text">Manage Posts</span>
+            </a>
+
+            <a routerLink="/mod/comments" 
+               routerLinkActive="active" 
+               class="nav-item">
+              <span class="material-icons">comment</span>
+              <span class="nav-text">Manage Comments</span>
+            </a>
           }
-
-          <a [routerLink]="isAdmin() ? '/admin/posts' : '/mod/posts'" routerLinkActive="active" class="nav-item">
-            <span class="material-icons">article</span>
-            <span class="nav-text">Manage Posts</span>
-          </a>
-
-          <a [routerLink]="isAdmin() ? '/admin/comments' : '/mod/comments'" routerLinkActive="active" class="nav-item">
-            <span class="material-icons">comment</span>
-            <span class="nav-text">Manage Comments</span>
-          </a>
         </div>
       }
     }
 
+    <!-- CATEGORIES Section -->
     <div class="nav-section">
       <h3 class="section-title">CATEGORIES</h3>
       @for (category of categories(); track category.id) {
-        <a [routerLink]="['/category', category.slug]" routerLinkActive="active" class="nav-item">
+        <a [routerLink]="['/category', category.slug]" 
+           routerLinkActive="active" 
+           class="nav-item">
           <span class="category-emoji">{{ category.emoji }}</span>
           <span class="nav-text">{{ category.name }}</span>
         </a>
@@ -68,9 +99,11 @@
   </nav>
 
   <div class="sidebar-footer">
-    <button class="create-post-btn" routerLink="/create-post">
-      <span class="material-icons">add</span>
-      <span>Create Post</span>
-    </button>
+    @if (isAuthenticated()) {
+      <button class="create-post-btn" routerLink="/create-post">
+        <span class="material-icons">add</span>
+        <span>Create Post</span>
+      </button>
+    }
   </div>
 </aside>

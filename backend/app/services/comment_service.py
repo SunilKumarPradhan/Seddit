@@ -10,7 +10,7 @@ from app.repositories.comment_repository import CommentRepository
 from app.repositories.post_repository import PostRepository
 from app.services.notification_service import NotificationService
 from app.schemas.notification import NotificationCreate
-from app.core.permissions import has_permission, check_resource_ownership
+from app.core.permissions import has_permission, check_resource_ownership, Permissions
 from app.utils.logger import app_logger
 
 
@@ -25,7 +25,7 @@ class CommentService:
     
     def create_comment(self, comment_data: CommentCreate, current_user: User) -> CommentResponse:
         """Create a new comment or reply."""
-        if not has_permission(current_user, "comment:create"):
+        if not has_permission(current_user, Permissions.CREATE_COMMENT):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create comments"
@@ -143,7 +143,7 @@ class CommentService:
         
         # Check permissions
         if not check_resource_ownership(current_user, comment.user_id):
-            if not has_permission(current_user, "comment:edit:any"):
+            if not has_permission(current_user, Permissions.DELETE_ANY_COMMENT):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have permission to edit this comment"
@@ -164,7 +164,7 @@ class CommentService:
         
         # Check permissions
         if not check_resource_ownership(current_user, comment.user_id):
-            if not has_permission(current_user, "comment:delete:any"):
+            if not has_permission(current_user, Permissions.DELETE_ANY_COMMENT):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have permission to delete this comment"
@@ -180,7 +180,7 @@ class CommentService:
         current_user: User
     ) -> CommentResponse:
         """Vote on a comment."""
-        if not has_permission(current_user, "vote:create"):
+        if not has_permission(current_user, Permissions.VOTE):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to vote"

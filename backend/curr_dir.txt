@@ -2012,10 +2012,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(LoggingMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(posts.router, prefix="/api/v1")
@@ -2084,11 +2085,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple rate limiting middleware using Redis."""
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path == "/health":
+        if request.url.path == "/health" or request.method == "OPTIONS":
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
-
         rate_limit_key = f"rate_limit:{client_ip}:{int(time.time() / 60)}"
 
         try:
@@ -4631,9 +4631,9 @@ if __name__ == "__main__":
     run_seed()
 SUMMARY
 Total files: 50
-Original size: 159,699 chars
-Processed size: 150,951 chars
-Reduction: 5.5%
+Original size: 159,529 chars
+Processed size: 151,007 chars
+Reduction: 5.3%
 
 File types:
  .py: 46

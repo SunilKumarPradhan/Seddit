@@ -8,7 +8,7 @@ from app.schemas.post import (
 )
 from app.repositories.post_repository import PostRepository
 from app.repositories.comment_repository import CommentRepository
-from app.core.permissions import has_permission, check_resource_ownership
+from app.core.permissions import has_permission, check_resource_ownership, Permissions
 from app.utils.logger import app_logger
 
 class PostService:
@@ -21,7 +21,7 @@ class PostService:
 
     def create_post(self, post_data: PostCreate, current_user: User) -> PostResponse:
         """Create a new post."""
-        if not has_permission(current_user, "post:create"):
+        if not has_permission(current_user, Permissions.CREATE_POST):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to create posts"
@@ -149,7 +149,7 @@ class PostService:
             )
 
         if not check_resource_ownership(current_user, post.user_id):
-            if not has_permission(current_user, "post:edit:any"):
+            if not has_permission(current_user,Permissions.DELETE_ANY_POST):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have permission to edit this post"
@@ -169,7 +169,7 @@ class PostService:
             )
 
         if not check_resource_ownership(current_user, post.user_id):
-            if not has_permission(current_user, "post:delete:any"):
+            if not has_permission(current_user, Permissions.DELETE_ANY_POST):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You don't have permission to delete this post"
@@ -180,7 +180,7 @@ class PostService:
 
     def vote_post(self, post_id: int, vote_data: VoteCreate, current_user: User) -> PostResponse:
         """Vote on a post."""
-        if not has_permission(current_user, "vote:create"):
+        if not has_permission(current_user,Permissions.VOTE):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have permission to vote"

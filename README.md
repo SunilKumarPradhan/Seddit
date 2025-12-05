@@ -29,3 +29,19 @@ npm run build -- --configuration=production
 
 docker-compose exec backend bash
 python seed.py
+
+
+
+
+
+# 1. Stamp to mark current migration as applied
+docker-compose exec backend alembic stamp head
+
+# 2. Verify it worked
+docker-compose exec backend alembic current
+
+# 3. Seed the roles
+docker-compose exec backend python seed.py
+
+# 4. Verify roles were created
+docker-compose exec db psql -U meme_user -d meme_forum -c "SELECT id, name FROM roles ORDER BY id;"

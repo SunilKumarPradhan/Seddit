@@ -19,7 +19,7 @@ class UserRepository:
             email=user_data.email,
             username=user_data.username,
             avatar_url=user_data.avatar_url,
-            role_id=3  # Default: user role
+            role_id=1 # Default: user role
         )
         self.db.add(user)
         self.db.commit()
