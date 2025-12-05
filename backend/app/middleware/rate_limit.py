@@ -5,45 +5,38 @@ from app.config import settings
 from app.utils.logger import app_logger
 import time
 
-
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Simple rate limiting middleware using Redis."""
-    
+
     async def dispatch(self, request: Request, call_next):
-        # Skip rate limiting for health check
-        if request.url.path == "/health":
+        # Skip rate limiting for health checks and OPTIONS requests
+        if request.url.path == "/health" or request.method == "OPTIONS":
             return await call_next(request)
-        
-        # Get client IP
+
         client_ip = request.client.host if request.client else "unknown"
-        
-        # Create rate limit key
         rate_limit_key = f"rate_limit:{client_ip}:{int(time.time() / 60)}"
-        
+
         try:
-            # Check current count
             current_count = redis_client.get_cache(rate_limit_key)
-            
+
             if current_count is None:
-                # First request in this minute
                 redis_client.set_cache(rate_limit_key, "1", expire=60)
             else:
                 count = int(current_count)
-                
+
                 if count >= settings.RATE_LIMIT_PER_MINUTE:
                     app_logger.warning(f"Rate limit exceeded for {client_ip}")
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                         detail="Too many requests. Please try again later."
                     )
-                
-                # Increment count
+
                 redis_client.client.incr(rate_limit_key)
-        
+
         except HTTPException:
             raise
         except Exception as e:
-            # If Redis fails, allow request (fail open)
+            # Don't block requests if Redis fails
             app_logger.error(f"Rate limit check failed: {e}")
-        
+
         return await call_next(request)

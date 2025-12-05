@@ -2,7 +2,7 @@ import os
 import re
 
 # Set your target directory here
-MAIN_PATH = r"frontend"
+MAIN_PATH = r"backend"
 
 # Folders to completely ignore
 IGNORE_FOLDERS = {
@@ -19,12 +19,12 @@ IGNORE_FILES = {
 # Extensions to ignore
 IGNORE_EXTENSIONS = {
     ".map", ".log", ".lock", ".jpg", ".jpeg", ".png", ".gif", ".ico",
-    ".svg", ".woff", ".woff2", ".ttf", ".eot" ,".md",".txt"
+    ".svg", ".woff", ".woff2", ".ttf", ".eot" ,".md",".txt" ,".css"
 }
 
 # Extensions to INCLUDE (whitelist)
 INCLUDE_EXTENSIONS = {
-    ".py", ".ts", ".js", ".html", ".css", ".scss", ".json", ".md"
+    ".py", ".ts", ".js", ".html", ".json", ".md"
 }
 
 

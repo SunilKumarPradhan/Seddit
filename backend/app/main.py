@@ -14,8 +14,7 @@ from app.services.notification_stream import (
     stop_notification_worker,
 )
 
-from app.api.v1 import auth, posts, comments, users, websocket, admin  # Added admin
-
+from app.api.v1 import auth, posts, comments, users, websocket, admin
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,7 +38,6 @@ async def lifespan(app: FastAPI):
         await stop_notification_worker(notification_task)
         redis_client.disconnect()
 
-
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -47,25 +45,26 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# ⚠️ CRITICAL: CORS MUST BE FIRST! (executes last)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-app.add_middleware(LoggingMiddleware)
+# Other middleware AFTER CORS
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(LoggingMiddleware)
 
-# Include all routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(posts.router, prefix="/api/v1")
 app.include_router(comments.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(websocket.router, prefix="/api/v1")
-app.include_router(admin.router, prefix="/api/v1")  # Added admin router
-
+app.include_router(admin.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
@@ -75,7 +74,6 @@ async def root():
         "version": settings.APP_VERSION,
         "docs": "/docs"
     }
-
 
 @app.get("/health")
 async def health_check():
