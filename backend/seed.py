@@ -1,6 +1,6 @@
 """
 Database seeding script for Seddit.
-Creates default roles and optionally sample data.
+Creates default roles.
 """
 
 from sqlalchemy.orm import Session
@@ -19,109 +19,59 @@ from app.utils.logger import app_logger
 def seed_roles(db: Session):
     """Seed default roles."""
     roles = [
-        {
-            "id": 1,
-            "name": "user",
-            "permissions": ["read", "write", "comment", "vote"],
-        },
-        {
-            "id": 2,
-            "name": "moderator",
-            "permissions": [
-                "read",
-                "write",
-                "comment",
-                "vote",
-                "delete_post",
-                "delete_comment",
-                "lock_post",
-                "ban_user",
-            ],
-        },
-        {
-            "id": 3,
-            "name": "admin",
-            "permissions": [
-                "read",
-                "write",
-                "comment",
-                "vote",
-                "delete_post",
-                "delete_comment",
-                "lock_post",
-                "ban_user",
-                "manage_roles",
-                "manage_users",
-                "admin_panel",
-            ],
-        },
+        {"id": 1, "name": "user"},
+        {"id": 2, "name": "moderator"},
+        {"id": 3, "name": "admin"},
     ]
+
+    print("\n" + "=" * 50)
+    print("Creating roles...")
+    print("=" * 50)
 
     for role_data in roles:
         existing = db.query(Role).filter(Role.id == role_data["id"]).first()
         if existing:
-            # Update existing role
-            existing.name = role_data["name"]
-            existing.permissions = role_data["permissions"]
-            app_logger.info(f"Updated role: {role_data['name']}")
+            print(f"⚠️  Role already exists: {role_data['name']} (ID: {role_data['id']})")
         else:
-            # Create new role
             role = Role(**role_data)
             db.add(role)
-            app_logger.info(f"Created role: {role_data['name']}")
+            print(f"✅ Role created: {role_data['name']} (ID: {role_data['id']})")
 
     db.commit()
-    app_logger.info("Roles seeded successfully!")
-
-
-def seed_admin_user(db: Session):
-    """Seed default admin user if not exists."""
-    admin_email = "admin@seddit.com"
     
-    existing = db.query(User).filter(User.email == admin_email).first()
-    if existing:
-        app_logger.info(f"Admin user already exists: {admin_email}")
-        return
-    
-    # Get admin role
-    admin_role = db.query(Role).filter(Role.name == "admin").first()
-    if not admin_role:
-        app_logger.error("Admin role not found! Run seed_roles first.")
-        return
-    
-    admin_user = User(
-        username="admin",
-        email=admin_email,
-        firebase_uid="admin_firebase_uid_placeholder",
-        role_id=admin_role.id,
-        is_active=True,
-        is_banned=False,
-    )
-    
-    db.add(admin_user)
-    db.commit()
-    app_logger.info(f"Created admin user: {admin_email}")
+    # Verify roles
+    all_roles = db.query(Role).order_by(Role.id).all()
+    print("\n" + "=" * 50)
+    print(f"Total roles in database: {len(all_roles)}")
+    for role in all_roles:
+        print(f"  - {role.name} (ID: {role.id})")
+    print("=" * 50 + "\n")
 
 
 def run_seed():
     """Main seeding function."""
-    print("=" * 50)
+    print("\n" + "🌱 " * 25)
     print("Starting database seeding...")
-    print("=" * 50)
-
-    # Create tables if they don't exist
-    Base.metadata.create_all(bind=engine)
+    print("🌱 " * 25 + "\n")
 
     db = SessionLocal()
     try:
         seed_roles(db)
-        seed_admin_user(db)
         
-        print("=" * 50)
+        print("\n" + "✅ " * 25)
         print("Database seeding completed successfully!")
-        print("=" * 50)
+        print("✅ " * 25 + "\n")
+        
+        print("📝 Next steps:")
+        print("  1. Go to http://localhost:4200")
+        print("  2. Sign up with your first account")
+        print("  3. First user will automatically become ADMIN")
+        print("  4. Test creating posts and accessing /admin")
+        print("\n")
+        
     except Exception as e:
         app_logger.error(f"Seeding failed: {e}")
+        print(f"\n❌ Error: {e}\n")
         db.rollback()
         raise
     finally:
